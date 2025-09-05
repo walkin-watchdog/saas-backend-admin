@@ -1,2 +1,4 @@
 .DS_Store
 .env
+backend/prisma/seed.ts
+backend/commands.md

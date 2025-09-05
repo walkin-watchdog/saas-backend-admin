@@ -27,6 +27,9 @@
     "docker:db": "docker compose -f docker-compose.test.yml up -d --wait",
     "deploy:staging": "tsx scripts/deploy-staging.ts"
   },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",

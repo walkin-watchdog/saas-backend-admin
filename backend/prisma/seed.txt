@@ -1,0 +1,277 @@
+/* eslint-disable no-console */
+import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcrypt';
+import assert from 'node:assert';
+
+const prisma = new PrismaClient();
+
+// Pulled from adminfrontend PERMISSIONS list
+// (platform.users.*, platform.roles.*, analytics.*, billing.*, tenants.*, etc.)
+const ALL_PERMS = [
+  'platform.users.read','platform.users.write','platform.roles.read','platform.roles.write',
+  'platform.permissions.read','platform.permissions.write',
+  'analytics.usage.read','analytics.revenue.read',
+  'billing.plans.read','billing.plans.write','billing.subscriptions.read','billing.subscriptions.write',
+  'tenants.read','tenants.write','tenants.suspend','tenants.resume',
+  'subscribers.read','subscribers.write','invoices.read','invoices.write'
+];
+
+async function ensurePermissions() {
+  for (const code of ALL_PERMS) {
+    await prisma.platformPermission.upsert({
+      where: { code }, // unique
+      update: {},
+      create: { code, description: code },
+    });
+  }
+}
+
+async function ensurePlatformAdmin() {
+  // role with all perms
+  const adminRole = await prisma.platformRole.upsert({
+    where: { code: 'platform_admin' },
+    update: { name: 'Platform Admin', description: 'Full platform access' },
+    create: { code: 'platform_admin', name: 'Platform Admin', description: 'Full platform access' },
+  });
+
+  const perms = await prisma.platformPermission.findMany();
+
+  // reset mappings for this role then add all
+  await prisma.platformRolePermission.deleteMany({ where: { platformRoleId: adminRole.id } });
+  if (perms.length) {
+    await prisma.platformRolePermission.createMany({
+      data: perms.map(p => ({ platformRoleId: adminRole.id, permissionId: p.id })),
+      skipDuplicates: true,
+    });
+  }
+
+  // platform admin user
+  const email = process.env.SEED_PLATFORM_ADMIN_EMAIL || 'admin@example.com';
+  const pwd   = process.env.SEED_PLATFORM_ADMIN_PASSWORD || 'admin123';
+  const passwordHash = await bcrypt.hash(pwd, 12);
+
+  const adminUser = await prisma.platformUser.upsert({
+    where: { email }, // unique
+    update: { name: 'Platform Admin', passwordHash },
+    create: { email, name: 'Platform Admin', passwordHash },
+  });
+
+  // assign role via composite key
+  await prisma.platformUserRole.upsert({
+    where: {
+      // @@id([platformUserId, platformRoleId])
+      platformUserId_platformRoleId: {
+        platformUserId: adminUser.id,
+        platformRoleId: adminRole.id,
+      },
+    },
+    update: {},
+    create: { platformUserId: adminUser.id, platformRoleId: adminRole.id },
+  });
+
+  console.log(`✔ Platform admin ready: ${email} (pwd: ${pwd})`);
+}
+
+async function ensurePlans() {
+  // simple "Basic" plan with monthly & yearly prices in USD (and INR for demo)
+  const plan = await prisma.plan.upsert({
+    where: { code: 'basic' },
+    update: {
+      marketingName: 'Basic',
+      marketingDescription: 'Starter plan',
+      billingFrequency: 'monthly',
+      public: true,
+      active: true,
+      version: 1,
+    },
+    create: {
+      code: 'basic',
+      marketingName: 'Basic',
+      marketingDescription: 'Starter plan',
+      billingFrequency: 'monthly',
+      featureHighlights: ['Email support'],
+      public: true,
+      active: true,
+      version: 1,
+    },
+  });
+
+  await prisma.planPrice.createMany({
+    data: [
+      { planId: plan.id, currency: 'USD', period: 'monthly', amountInt: 50 },
+      { planId: plan.id, currency: 'USD', period: 'yearly',  amountInt: 500 },
+      { planId: plan.id, currency: 'INR', period: 'monthly', amountInt: 4300 },
+      { planId: plan.id, currency: 'INR', period: 'yearly',  amountInt: 43000 },
+    ],
+    skipDuplicates: true, // unique on [planId, currency, period]
+  });
+
+  return plan;
+}
+
+// Helper: build a postgres URL (password lives here for dedicated tenants)
+function buildPostgresUrl(parts?: {
+  user?: string; pass?: string; host?: string; port?: string; db?: string;
+}) {
+  if (!parts) return undefined;
+  const { user, pass, host, port = '5432', db } = parts;
+  if (!user || !pass || !host || !db) return undefined;
+  return `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(pass)}@${host}:${port}/${db}`;
+}
+
+// Helper: create a tenant owner (hashed password) under RLS by elevating app.role
+async function createTenantOwner(tenantId: string, email: string, plain: string, name = 'Owner') {
+  assert(tenantId && email && plain, 'tenant owner requires tenantId, email, password');
+  const hash = await bcrypt.hash(plain, 12);
+  await prisma.$transaction(async (tx) => {
+    // satisfy policies that check is_admin() / app.tenantId (we use admin bypass)
+    await tx.$executeRaw`SELECT set_config('app.role','admin', true)`;
+    await (tx as typeof prisma).user.create({
+      data: {
+        tenantId,
+        email,
+        password: hash,
+        name,
+        role: 'ADMIN',
+        emailVerified: true,
+      },
+    });
+  });
+}
+
+async function ensureTenants(planId: string) {
+  // 1) Dedicated tenant (uses datasourceUrl if provided)
+  const dedicatedDsn =
+    process.env.DEDICATED_TENANT_URL ||
+    buildPostgresUrl({
+      user: process.env.DEDICATED_DB_USER,
+      pass: process.env.DEDICATED_DB_PASS,   // <-- put the dedicated DB password here (env)
+      host: process.env.DEDICATED_DB_HOST,
+      port: process.env.DEDICATED_DB_PORT,
+      db:   process.env.DEDICATED_DB_NAME,
+    }) ||
+    process.env.DATABASE_URL || null; // local dev can point to same DB
+
+  const tDedicated = await prisma.tenant.create({
+    data: {
+      name: 'Dedicated',
+      status: 'active',
+      dedicated: true,
+      datasourceUrl: dedicatedDsn || undefined,
+      dbName: 'dedicated_db',
+    },
+  });
+
+  await createTenantOwner(
+    tDedicated.id,
+    process.env.SEED_DEDICATED_OWNER_EMAIL   || 'ownerdedicated@example.com',
+    process.env.SEED_DEDICATED_OWNER_PASSWORD|| 'dedicated123',
+    'Dedicated Owner'
+  );
+
+  await prisma.subscriber.create({
+    data: {
+      tenantId: tDedicated.id,
+      displayName: 'Dedicated',
+      ownerEmail: 'ownerdedicated@example.com',
+      billingStatus: 'active',
+      kycStatus: 'verified',
+    },
+  });
+
+  await prisma.subscription.create({
+    data: {
+      tenantId: tDedicated.id,
+      planId,
+      status: 'active',
+      currency: 'USD',
+      currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  // 2) Shared (trial)
+  const tTrial = await prisma.tenant.create({
+    data: { name: 'SharedTrialCo', status: 'active', dedicated: false },
+  });
+
+  await prisma.subscriber.create({
+    data: {
+      tenantId: tTrial.id,
+      displayName: 'SharedTrialCo',
+      ownerEmail: 'ownertrial@example.com',
+      billingStatus: 'trialing',
+      kycStatus: 'pending',
+    },
+  });
+
+  await createTenantOwner(
+    tTrial.id,
+    process.env.SEED_TRIAL_OWNER_EMAIL   || 'ownertrial@example.com',
+    process.env.SEED_TRIAL_OWNER_PASSWORD|| 'trial123',
+    'Trial Owner'
+  );
+
+
+  await prisma.subscription.create({
+    data: {
+      tenantId: tTrial.id,
+      planId,
+      status: 'trialing',
+      currency: 'USD',
+      trialStartedAt: new Date(),
+      trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  // 3) Shared (active)
+  const tActive = await prisma.tenant.create({
+    data: { name: 'SharedActiveCo', status: 'active', dedicated: false },
+  });
+
+  await prisma.subscriber.create({
+    data: {
+      tenantId: tActive.id,
+      displayName: 'SharedActiveCo',
+      ownerEmail: 'owneractive@example.com',
+      billingStatus: 'active',
+      kycStatus: 'verified',
+    },
+  });
+
+  await createTenantOwner(
+    tActive.id,
+    process.env.SEED_ACTIVE_OWNER_EMAIL   || 'owneractive@example.com',
+    process.env.SEED_ACTIVE_OWNER_PASSWORD|| 'active123',
+    'Active Owner'
+  );
+
+  await prisma.subscription.create({
+    data: {
+      tenantId: tActive.id,
+      planId,
+      status: 'active',
+      currency: 'USD',
+      currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  console.log('✔ Tenants seeded:',
+    { dedicated: tDedicated.id, trial: tTrial.id, active: tActive.id });
+}
+
+async function main() {
+  await ensurePermissions();
+  await ensurePlatformAdmin();
+  const plan = await ensurePlans();
+  await ensureTenants(plan.id);
+}
+
+main()
+  .then(() => console.log('Seed complete'))
+  .catch((e) => {
+    console.error('Seed failed', e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });
