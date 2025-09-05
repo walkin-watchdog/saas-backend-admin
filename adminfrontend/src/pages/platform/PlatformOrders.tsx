@@ -27,9 +27,9 @@ export default function PlatformOrders() {
   const navigate = useNavigate();
   const { dateFilter, setDateFilter } = useFilters();
   const { currentPage, pageSize, setCurrentPage } = usePagination();
-  const [statusFilter, setStatusFilter] = useState('');
-  const [gatewayFilter, setGatewayFilter] = useState<OrderFilters['gateway'] | ''>('');
-  const [typeFilter, setTypeFilter] = useState<OrderFilters['type'] | ''>('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [gatewayFilter, setGatewayFilter] = useState<string>('all');
+  const [typeFilter, setTypeFilter] = useState<string>('all');
   const [isLoading, setIsLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isRefunding, setIsRefunding] = useState(false);
@@ -67,9 +67,9 @@ export default function PlatformOrders() {
       const filters: OrderFilters = {
         limit: pageSize + 1,
         offset,
-        status: statusFilter || undefined,
-        gateway: gatewayFilter === '' ? undefined : gatewayFilter,
-        type: typeFilter === '' ? undefined : typeFilter,
+        status: statusFilter !== 'all' ? statusFilter : undefined,
+        gateway: gatewayFilter !== 'all' ? gatewayFilter as OrderFilters['gateway'] : undefined,
+        type: typeFilter !== 'all' ? typeFilter as OrderFilters['type'] : undefined,
         ...(dateFilter && {
           startDate: new Date(dateFilter).toISOString(),
           endDate: new Date(new Date(dateFilter).getTime() + 24 * 60 * 60 * 1000).toISOString(),
@@ -307,12 +307,12 @@ export default function PlatformOrders() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Type</label>
-              <Select value={typeFilter} onValueChange={(value) => setTypeFilter(value as OrderFilters['type'] | '')}>
+              <Select value={typeFilter} onValueChange={(value) => setTypeFilter(value ?? 'all')}>
                 <SelectTrigger>
                   <SelectValue placeholder="All types" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Types</SelectItem>
+                  <SelectItem value="all">All Types</SelectItem>
                   <SelectItem value="invoice">Invoice</SelectItem>
                   <SelectItem value="refund">Refund</SelectItem>
                   <SelectItem value="adjustment">Adjustment</SelectItem>
@@ -340,7 +340,7 @@ export default function PlatformOrders() {
                   <SelectValue placeholder="All statuses" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Statuses</SelectItem>
+                  <SelectItem value="all">All Statuses</SelectItem>
                   {statusOptions.map(status => (
                     <SelectItem key={status} value={status}>
                       {status
@@ -354,12 +354,12 @@ export default function PlatformOrders() {
             
             <div className="space-y-2">
               <label className="text-sm font-medium">Gateway</label>
-              <Select value={gatewayFilter} onValueChange={(value) => setGatewayFilter(value as OrderFilters['gateway'] | '')}>
+              <Select value={gatewayFilter} onValueChange={(value) => setGatewayFilter(value ?? 'all')}>
                 <SelectTrigger>
                   <SelectValue placeholder="All gateways" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Gateways</SelectItem>
+                  <SelectItem value="all">All Gateways</SelectItem>
                   <SelectItem value="razorpay">Razorpay</SelectItem>
                   <SelectItem value="paypal">PayPal</SelectItem>
                   <SelectItem value="manual">Manual</SelectItem>

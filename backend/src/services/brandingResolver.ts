@@ -49,9 +49,9 @@ export class BrandingResolver {
     const platformDefaults = {
       logoUrl: process.env.LOGO_URL || '',
       colors: {
-        primary: process.env.PRIMARY_COLOR || '#0F62FE',
-        secondary: process.env.SECONDARY_COLOR || '#111827',
-        tertiary: process.env.TERTIARY_COLOR || '#6B7280'
+        primary: process.env.PRIMARY_COLOR || '#ff914d',
+        secondary: process.env.SECONDARY_COLOR || '#104c57',
+        tertiary: process.env.TERTIARY_COLOR || '#104c57'
       },
       scope: 'platform' as const,
       defaultsUsed: true
@@ -79,9 +79,40 @@ export class BrandingResolver {
       if (tenantId) {
         const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
         if (tenant?.dedicated) { // enterprise
-          const brand = await TenantConfigService.getBrandingConfig(tenantId);
+          try {
+            const brand = await TenantConfigService.getBrandingConfig(tenantId);
+            // Prefer tenant's uploaded logo when platform default is in place
+            brand.logoUrl = await preferTenantLogo(tenantId, brand);
+            if (brand.whiteLabelBranding) {
+              return {
+                logoUrl: brand.logoUrl,
+                colors: {
+                  primary: brand.primaryColor || platformDefaults.colors.primary,
+                  secondary: brand.secondaryColor || platformDefaults.colors.secondary,
+                  tertiary: brand.tertiaryColor || platformDefaults.colors.tertiary
+                },
+                scope: 'tenant' as const,
+                defaultsUsed: Boolean(brand.defaultsUsed)
+              };
+            }
+          } catch (e: any) {
+            if (e?.code === 'BRANDING_CONFIG_MISSING') {
+              return platformDefaults;
+            }
+            throw e;
+          }
+        }
+      }
+    }
+
+    // If a tenant session is present (inside admin), allow enterprise branding irrespective of host
+    if (opts.tenantId) {
+      const tenant = await prisma.tenant.findUnique({ where: { id: opts.tenantId } });
+      if (tenant?.dedicated) {
+        try {
+          const brand = await TenantConfigService.getBrandingConfig(opts.tenantId);
           // Prefer tenant's uploaded logo when platform default is in place
-          brand.logoUrl = await preferTenantLogo(tenantId, brand);
+          brand.logoUrl = await preferTenantLogo(opts.tenantId, brand);
           if (brand.whiteLabelBranding) {
             return {
               logoUrl: brand.logoUrl,
@@ -94,28 +125,11 @@ export class BrandingResolver {
               defaultsUsed: Boolean(brand.defaultsUsed)
             };
           }
-        }
-      }
-    }
-
-    // If a tenant session is present (inside admin), allow enterprise branding irrespective of host
-    if (opts.tenantId) {
-      const tenant = await prisma.tenant.findUnique({ where: { id: opts.tenantId } });
-      if (tenant?.dedicated) {
-        const brand = await TenantConfigService.getBrandingConfig(opts.tenantId);
-        // Prefer tenant's uploaded logo when platform default is in place
-        brand.logoUrl = await preferTenantLogo(opts.tenantId, brand);
-        if (brand.whiteLabelBranding) {
-          return {
-            logoUrl: brand.logoUrl,
-            colors: {
-              primary: brand.primaryColor || platformDefaults.colors.primary,
-              secondary: brand.secondaryColor || platformDefaults.colors.secondary,
-              tertiary: brand.tertiaryColor || platformDefaults.colors.tertiary
-            },
-            scope: 'tenant' as const,
-            defaultsUsed: Boolean(brand.defaultsUsed)
-          };
+        } catch (e: any) {
+          if (e?.code === 'BRANDING_CONFIG_MISSING') {
+            return platformDefaults;
+          }
+          throw e;
         }
       }
     }

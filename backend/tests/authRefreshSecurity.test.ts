@@ -21,6 +21,9 @@ import * as captcha from '../src/utils/captcha';
 import * as jwt from '../src/utils/jwt';
 import * as blacklist from '../src/utils/blacklist';
 import { logger } from '../src/utils/logger';
+jest.mock('../src/services/impersonationService', () => ({
+  ImpersonationService: { validateGrant: jest.fn().mockResolvedValue(true) },
+}));
 
 // Mock TenantConfig-dependent captcha as always-ok for these tests
 jest.mock('../src/utils/captcha', () => ({
@@ -38,6 +41,8 @@ jest.mock('../src/services/userService', () => ({
 jest.spyOn(jwt, 'verifyRefresh');
 jest.spyOn(blacklist, 'isBlacklisted').mockResolvedValue(false);
 jest.spyOn(blacklist, 'addToBlacklist').mockResolvedValue(undefined as any);
+jest.spyOn(blacklist, 'isFamilyBlacklisted').mockResolvedValue(false);
+jest.spyOn(blacklist, 'addFamilyToBlacklist').mockResolvedValue(undefined as any);
 
 // If your jwt.sign* functions require env secrets, mock them to deterministic values
 // (keeps tests hermetic and avoids env coupling)
@@ -68,6 +73,9 @@ describe('POST /api/auth/refresh security', () => {
     spySignAccess.mockReturnValue('ACCESS_TOKEN');
     spySignRefresh.mockReturnValue('REFRESH_TOKEN');
     (blacklist.isBlacklisted as jest.Mock).mockResolvedValue(false);
+    (blacklist.isFamilyBlacklisted as jest.Mock).mockResolvedValue(false);
+    (blacklist.addToBlacklist as jest.Mock).mockResolvedValue(undefined as any);
+    (blacklist.addFamilyToBlacklist as jest.Mock).mockResolvedValue(undefined as any);
     jest.spyOn(logger, 'warn').mockImplementation(() => logger as any);
     jest.spyOn(logger, 'info').mockImplementation(() => logger as any);
   });
@@ -349,5 +357,40 @@ describe('POST /api/auth/refresh security', () => {
       'auth.refresh_failed',
       expect.objectContaining({ tenantId: 'T1', reason: 'csrf_mismatch' })
     );
+  });
+
+  test('refresh with impersonation sub skips blacklist insert', async () => {
+    const app = makeApp();
+    const now = Math.floor(Date.now() / 1000);
+    const payload = {
+      sub: 'impersonation:U1',
+      tenantId: 'T1',
+      role: 'ADMIN',
+      tokenVersion: 0,
+      platformAdmin: false,
+      jti: 'J1',
+      rfid: 'F1',
+      exp: now + 3600,
+      iat: now,
+      impersonation: {
+        platformUserId: 'PU',
+        scope: 'full_tenant_admin',
+        reason: 't',
+        grantId: 'G',
+        jti: 'IJTI',
+      },
+    } as any;
+
+    (jwt.verifyRefresh as jest.Mock).mockReturnValue(payload);
+
+    const res = await request(app)
+      .post('/api/auth/refresh')
+      .set('Origin', 'http://good.test')
+      .set('x-csrf-token', 'abc')
+      .set('Cookie', ['csrf=abc', 'rt=dummy'])
+      .send({});
+
+    expect(res.status).toBe(200);
+    expect(blacklist.addToBlacklist).not.toHaveBeenCalled();
   });
 });

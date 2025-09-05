@@ -61,6 +61,11 @@ async function pruneDbIfDue(): Promise<void> {
 export async function addToBlacklist(entry: BlacklistEntry): Promise<void> {
   await pruneDbIfDue();
   mem.set(key(entry.tenantId, entry.userId, entry.jti), entry.exp.getTime());
+  if (entry.userId.startsWith('impersonation:')) {
+    // Impersonation tokens don't have a corresponding user record, so the
+    // foreign key would fail. We still track in-memory but skip the DB insert.
+    return;
+  }
   await prisma().refreshTokenBlacklist.create({ data: entry });
 }
 

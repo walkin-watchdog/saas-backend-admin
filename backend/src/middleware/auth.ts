@@ -47,6 +47,44 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
         return res.status(403).json({ error: 'Cross-tenant access forbidden.' });
       }
 
+      if (payload.impersonation) {
+        const { ImpersonationService } = await import('../services/impersonationService');
+        const isValid = await ImpersonationService.validateGrant(payload.impersonation.jti);
+        if (!isValid) {
+          authFailureCounter.inc({ tenant: hashTenantId(tenantId) });
+          return res.status(401).json({ error: 'Impersonation grant expired or revoked' });
+        }
+
+        const allowlist = (process.env.IMPERSONATION_CIDR_ALLOWLIST || '')
+          .split(',')
+          .map(s => s.trim())
+          .filter(Boolean);
+        if (allowlist.length) {
+          const clientIp = realIp(req);
+          if (!isIpAllowed(clientIp, allowlist)) {
+            authFailureCounter.inc({ tenant: hashTenantId(tenantId) });
+            return res.status(403).json({ error: 'Access denied from this IP address' });
+          }
+        }
+
+        req.user = {
+          id: payload.sub,
+          email: `${payload.impersonation.platformUserId}@platform`,
+          role: payload.role,
+          platformAdmin: true,
+        };
+        req.impersonation = {
+          platformUserId: payload.impersonation.platformUserId,
+          tenantId: payload.tenantId,
+          scope: payload.impersonation.scope,
+          reason: payload.impersonation.reason,
+          grantId: payload.impersonation.grantId,
+        };
+        const store = requestContext.getStore();
+        if (store) store.userId = req.user.id;
+        return next();
+      }
+
       const prisma = getTenantPrisma();
       const user = await prisma.user.findUnique({
         where: { id: payload.sub },
@@ -84,7 +122,10 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
           return res.status(401).json({ error: 'Impersonation grant expired or revoked' });
         }
 
-        const allowlist = (process.env.IMPERSONATION_CIDR_ALLOWLIST || '').split(',').map(s => s.trim()).filter(Boolean);
+        const allowlist = (process.env.IMPERSONATION_CIDR_ALLOWLIST || '')
+          .split(',')
+          .map(s => s.trim())
+          .filter(Boolean);
         if (allowlist.length) {
           const clientIp = realIp(req);
           if (!isIpAllowed(clientIp, allowlist)) {

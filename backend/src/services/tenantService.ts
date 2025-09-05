@@ -4,6 +4,7 @@ import { PrismaClient, Prisma } from '@prisma/client';
 import { logger } from '../utils/logger';
 import { eventBus, TENANT_EVENTS } from '../utils/eventBus';
 import { opMetrics } from '../utils/opMetrics';
+import { retryInteractiveTx } from '../utils/txRetry';
 
 export interface TenantContext {
   id: string;
@@ -138,10 +139,10 @@ export class TenantService {
       await prisma.tenantDomain.createMany({
         data: [
           { tenantId: tenant.id, domain: 'localhost:5174' },
-          { tenantId: tenant.id, domain: 'localhost:5173' },
+          { tenantId: tenant.id, domain: 'localhost:8080' },
           { tenantId: tenant.id, domain: 'localhost:3001' },
           { tenantId: tenant.id, domain: '127.0.0.1:5174' },
-          { tenantId: tenant.id, domain: '127.0.0.1:5173' },
+          { tenantId: tenant.id, domain: '127.0.0.1:8080' },
           { tenantId: tenant.id, domain: '127.0.0.1:3001' }
         ]
       });
@@ -270,8 +271,9 @@ export class TenantService {
   }
 
   /**
-   * Execute function with specific tenant context (for background jobs)
-   */
+    * Execute function with specific tenant context (for background jobs)
+    * Note: The callback fn should be idempotent as it may be retried on transaction timeouts.
+    */
   static async withTenantContext<T>(
     tenant: TenantContext,
     fn: (prisma: PrismaClient | Prisma.TransactionClient) => Promise<T>
@@ -291,14 +293,16 @@ export class TenantService {
     }
     
     try {
-      return await tenantPrisma.$transaction(async (tx: Prisma.TransactionClient) => {
-        await tx.$executeRaw`SELECT set_config('app.tenantId', ${tenant.id}, true)`;
-        const { tenantContext } = await import('../middleware/tenantMiddleware');
-        return await tenantContext.run(
-          { tenant, prisma: tx as unknown as PrismaClient },
-          () => fn(tx)
-        );
-      });
+      return await retryInteractiveTx(() =>
+        tenantPrisma.$transaction(async (tx: Prisma.TransactionClient) => {
+          await tx.$executeRaw`SELECT set_config('app.tenantId', ${tenant.id}, true)`;
+          const { tenantContext } = await import('../middleware/tenantMiddleware');
+          return await tenantContext.run(
+            { tenant, prisma: tx as unknown as PrismaClient },
+            () => fn(tx)
+          );
+        })
+      );
     } finally {
     }
   }

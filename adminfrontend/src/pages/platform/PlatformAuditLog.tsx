@@ -20,9 +20,9 @@ export default function PlatformAuditLog() {
   const [filteredEntries, setFilteredEntries] = useState<AuditLogEntry[]>([]);
   const { searchTerm, setSearchTerm } = useFilters();
   const { currentPage, pageSize, setCurrentPage } = usePagination();
-  const [actionFilter, setActionFilter] = useState('');
-  const [resourceFilter, setResourceFilter] = useState('');
-  const [userFilter, setUserFilter] = useState('');
+  const [actionFilter, setActionFilter] = useState('all');
+  const [resourceFilter, setResourceFilter] = useState('all');
+  const [userFilter, setUserFilter] = useState('all');
   const [startDateFilter, setStartDateFilter] = useState('');
   const [endDateFilter, setEndDateFilter] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -57,9 +57,9 @@ export default function PlatformAuditLog() {
       const filters: AuditLogFilters = {
         offset: (currentPage - 1) * pageSize,
         limit: pageSize,
-        action: actionFilter || undefined,
-        resource: resourceFilter || undefined,
-        platformUserId: userFilter || undefined,
+        action: actionFilter !== 'all' ? actionFilter : undefined,
+        resource: resourceFilter !== 'all' ? resourceFilter : undefined,
+        platformUserId: userFilter !== 'all' ? userFilter : undefined,
         ...(startDateFilter && { startDate: new Date(startDateFilter).toISOString() }),
         ...(endDateFilter && { endDate: new Date(endDateFilter).toISOString() })
       };
@@ -86,15 +86,15 @@ export default function PlatformAuditLog() {
       );
     }
 
-    if (actionFilter) {
+    if (actionFilter !== 'all') {
       filtered = filtered.filter(entry => entry.action === actionFilter);
     }
 
-    if (resourceFilter) {
+    if (resourceFilter !== 'all') {
       filtered = filtered.filter(entry => entry.resource === resourceFilter);
     }
 
-    if (userFilter) {
+    if (userFilter !== 'all') {
       filtered = filtered.filter(entry => entry.platformUserId === userFilter);
     }
 
@@ -167,9 +167,9 @@ export default function PlatformAuditLog() {
     try {
       setIsExporting(true);
       const blob = await auditLogApi.exportCsv({
-        action: actionFilter || undefined,
-        resource: resourceFilter || undefined,
-        platformUserId: userFilter || undefined,
+        action: actionFilter !== 'all' ? actionFilter : undefined,
+        resource: resourceFilter !== 'all' ? resourceFilter : undefined,
+        platformUserId: userFilter !== 'all' ? userFilter : undefined,
         ...(startDateFilter && { startDate: new Date(startDateFilter).toISOString() }),
         ...(endDateFilter && { endDate: new Date(endDateFilter).toISOString() })
       });
@@ -273,7 +273,7 @@ export default function PlatformAuditLog() {
                   <SelectValue placeholder="All actions" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Actions</SelectItem>
+                  <SelectItem value="all">All Actions</SelectItem>
                   {uniqueActions.map(action => (
                     <SelectItem key={action} value={action}>{action}</SelectItem>
                   ))}
@@ -288,7 +288,7 @@ export default function PlatformAuditLog() {
                   <SelectValue placeholder="All resources" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Resources</SelectItem>
+                  <SelectItem value="all">All Resources</SelectItem>
                   {uniqueResources.map(resource => (
                     <SelectItem key={resource} value={resource}>{resource}</SelectItem>
                   ))}
@@ -303,7 +303,7 @@ export default function PlatformAuditLog() {
                   <SelectValue placeholder="All users" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Users</SelectItem>
+                  <SelectItem value="all">All Users</SelectItem>
                   {uniqueUsers.map(user => (
                     <SelectItem key={user} value={user}>{user}</SelectItem>
                   ))}

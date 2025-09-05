@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Navigate, useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePublicTheme } from '@/hooks/useTheme';
@@ -22,7 +22,7 @@ export const Login = () => {
 
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { user, login, completeTenantOAuth } = useAuth();
+  const { login, completeTenantOAuth } = useAuth();
   const { theme } = usePublicTheme();
 
   const expired = searchParams.get('expired');
@@ -52,34 +52,6 @@ export const Login = () => {
       }
     })();
   }, []);
-
-  // Check for existing admin users
-  const [checking, setChecking] = useState(true);
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/auth/check-admin`);
-        if (res.ok) {
-          const data = await res.json();
-          if (!data.exists) {
-            navigate('/get-started');
-            return;
-          }
-        }
-      } finally {
-        setChecking(false);
-      }
-    })();
-  }, [navigate]);
-
-  if (user) return <Navigate to="/" replace />;
-  if (checking) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--brand-primary)]"></div>
-      </div>
-    );
-  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

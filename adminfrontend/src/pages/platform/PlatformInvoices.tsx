@@ -17,7 +17,7 @@ export default function PlatformInvoices() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const { dateFilter, setDateFilter } = useFilters();
   const { currentPage, pageSize, setCurrentPage } = usePagination();
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState<string | null>(null);
   const [isResending, setIsResending] = useState<string | null>(null);
@@ -36,7 +36,7 @@ export default function PlatformInvoices() {
       const filters: InvoiceFilters = {
         limit: pageSize + 1,
         offset,
-        status: statusFilter || undefined,
+        status: statusFilter !== 'all' ? statusFilter : undefined,
         ...(dateFilter && {
           startDate: new Date(dateFilter).toISOString(),
           endDate: new Date(new Date(dateFilter).getTime() + 24 * 60 * 60 * 1000).toISOString(),
@@ -151,7 +151,7 @@ export default function PlatformInvoices() {
                   <SelectValue placeholder="All statuses" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Statuses</SelectItem>
+                  <SelectItem value="all">All Statuses</SelectItem>
                   <SelectItem value="draft">Draft</SelectItem>
                   <SelectItem value="sent">Sent</SelectItem>
                   <SelectItem value="paid">Paid</SelectItem>

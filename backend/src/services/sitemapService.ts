@@ -11,7 +11,7 @@ export class SitemapService {
 
   static async generateSitemap(): Promise<string> {
     try {
-      const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      const baseUrl = process.env.FRONTEND_URL || 'http://localhost:8080';
       
       // Fetch all published products
       const products = await ProductService.findManyProducts({

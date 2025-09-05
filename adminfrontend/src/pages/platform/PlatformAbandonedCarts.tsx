@@ -18,8 +18,8 @@ export default function PlatformAbandonedCarts() {
   const [carts, setCarts] = useState<PlatformAbandonedCart[]>([]);
   const { searchTerm, setSearchTerm, dateFilter, setDateFilter } = useFilters();
   const { currentPage, pageSize, setCurrentPage } = usePagination();
-  const [statusFilter, setStatusFilter] = useState('');
-  const [planFilter, setPlanFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [planFilter, setPlanFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
   const [isSendingRecovery, setIsSendingRecovery] = useState<string | null>(null);
   const [isDiscarding, setIsDiscarding] = useState<string | null>(null);
@@ -52,8 +52,8 @@ export default function PlatformAbandonedCarts() {
       const filters: AbandonedCartFilters = {
         limit: pageSize + 1,
         offset,
-        status: (statusFilter as 'open' | 'recovered' | 'discarded') || undefined,
-        planId: planFilter || undefined,
+        status: statusFilter !== 'all' ? (statusFilter as 'open' | 'recovered' | 'discarded') : undefined,
+        planId: planFilter !== 'all' ? planFilter : undefined,
         ...(searchTerm && { email: searchTerm }),
         ...(dateFilter && {
           seenSince: new Date(dateFilter).toISOString(),
@@ -260,7 +260,7 @@ export default function PlatformAbandonedCarts() {
                   <SelectValue placeholder="All statuses" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Statuses</SelectItem>
+                  <SelectItem value="all">All Statuses</SelectItem>
                   <SelectItem value="open">Open</SelectItem>
                   <SelectItem value="recovered">Recovered</SelectItem>
                   <SelectItem value="discarded">Discarded</SelectItem>
@@ -275,7 +275,7 @@ export default function PlatformAbandonedCarts() {
                   <SelectValue placeholder="All plans" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Plans</SelectItem>
+                  <SelectItem value="all">All Plans</SelectItem>
                   <SelectItem value="basic">Basic</SelectItem>
                   <SelectItem value="pro">Pro</SelectItem>
                   <SelectItem value="enterprise">Enterprise</SelectItem>

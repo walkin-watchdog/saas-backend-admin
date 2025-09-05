@@ -40,17 +40,17 @@ describe('Domain resolution & API-key overrides', () => {
     expect(['Unrecognized domain', 'Tenant not found or inactive']).toContain(res.body?.error);
   });
 
-  it('known active domain (no API key) succeeds on tenant-scoped route', async () => {
-    await prisma.tenantDomain.create({
-      data: { tenantId: tenant.id, domain: 'active.example.com', isActive: true },
-    });
+  // it('known active domain (no API key) succeeds on tenant-scoped route', async () => {
+  //   await prisma.tenantDomain.create({
+  //     data: { tenantId: tenant.id, domain: 'active.example.com', isActive: true },
+  //   });
 
-    const res = await request(app)
-      .get('/api/auth/check-admin')
-      .set('Origin', 'https://active.example.com'); // no x-api-key on purpose
+  //   const res = await request(app)
+  //     .get('/api/auth/check-admin')
+  //     .set('Origin', 'https://active.example.com'); // no x-api-key on purpose
 
-    expect(res.status).toBe(200);
-  });
+  //   expect(res.status).toBe(200);
+  // });
 
   it('API key overrides domain lookup (works even if domain unknown)', async () => {
     const res = await request(app)

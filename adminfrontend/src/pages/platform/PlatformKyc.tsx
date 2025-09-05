@@ -21,7 +21,7 @@ export default function PlatformKyc() {
   const [kycRecords, setKycRecords] = useState<KycRecord[]>([]);
   const [filteredRecords, setFilteredRecords] = useState<KycRecord[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
   const [selectedRecord, setSelectedRecord] = useState<KycRecord | null>(null);
   const [isReviewing, setIsReviewing] = useState(false);
@@ -93,7 +93,7 @@ export default function PlatformKyc() {
       );
     }
 
-    if (statusFilter) {
+    if (statusFilter !== 'all') {
       filtered = filtered.filter(record => record.status === statusFilter);
     }
 
@@ -235,7 +235,7 @@ export default function PlatformKyc() {
                   <SelectValue placeholder="All statuses" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Statuses</SelectItem>
+                  <SelectItem value="all">All Statuses</SelectItem>
                   <SelectItem value="pending">Pending Review</SelectItem>
                   <SelectItem value="verified">Verified</SelectItem>
                   <SelectItem value="rejected">Rejected</SelectItem>

@@ -21,8 +21,8 @@ export default function PlatformWebhooks() {
   const [deliveries, setDeliveries] = useState<WebhookDelivery[]>([]);
   const { searchTerm, setSearchTerm } = useFilters();
   const { currentPage, pageSize, setCurrentPage } = usePagination();
-  const [statusFilter, setStatusFilter] = useState('');
-  const [providerFilter, setProviderFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [providerFilter, setProviderFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
   const [selectedDelivery, setSelectedDelivery] = useState<WebhookDelivery | null>(null);
   const [isReplaying, setIsReplaying] = useState<string | null>(null);
@@ -52,8 +52,8 @@ export default function PlatformWebhooks() {
       const filters: WebhookFilters = {
         limit: pageSize + 1,
         offset,
-        status: (statusFilter as 'processed' | 'failed' | 'received' | 'skipped') || undefined,
-        ...(providerFilter && { provider: providerFilter as 'razorpay' | 'paypal' }),
+        status: statusFilter !== 'all' ? (statusFilter as 'processed' | 'failed' | 'received' | 'skipped') : undefined,
+        ...(providerFilter !== 'all' && { provider: providerFilter as 'razorpay' | 'paypal' }),
       };
       const data = await webhooksApi.listDeliveries(filters);
       const filtered = searchTerm
@@ -237,7 +237,7 @@ export default function PlatformWebhooks() {
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All</SelectItem>
+                <SelectItem value="all">All</SelectItem>
                 <SelectItem value="processed">Processed</SelectItem>
                 <SelectItem value="failed">Failed</SelectItem>
                 <SelectItem value="received">Received</SelectItem>
@@ -249,7 +249,7 @@ export default function PlatformWebhooks() {
                 <SelectValue placeholder="Provider" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All</SelectItem>
+                <SelectItem value="all">All</SelectItem>
                 <SelectItem value="razorpay">Razorpay</SelectItem>
                 <SelectItem value="paypal">PayPal</SelectItem>
               </SelectContent>

@@ -107,7 +107,7 @@ export default function PlatformSubscribers() {
       const filters: SubscriberFilters = {
         limit: pageSize + 1,
         offset,
-        billingStatus: (statusFilter as 'trialing' | 'active' | 'past_due' | 'cancelled' | 'suspended') || undefined,
+        billingStatus: statusFilter !== 'all' ? (statusFilter as 'trialing' | 'active' | 'past_due' | 'cancelled' | 'suspended') : undefined,
       };
 
       const response = await subscribersApi.list(filters);
@@ -714,7 +714,7 @@ export default function PlatformSubscribers() {
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Status</SelectItem>
+                  <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="active">Active</SelectItem>
                   <SelectItem value="trialing">Trialing</SelectItem>
                   <SelectItem value="past_due">Past Due</SelectItem>
@@ -1682,15 +1682,15 @@ export default function PlatformSubscribers() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="mrrBand">MRR Band</Label>
-                <Select 
-                  value={generalUpdateData.mrrBand || ''} 
-                  onValueChange={(value) => setGeneralUpdateData(prev => ({ ...prev, mrrBand: value }))}
+                <Select
+                  value={generalUpdateData.mrrBand || 'none'}
+                  onValueChange={(value) => setGeneralUpdateData(prev => ({ ...prev, mrrBand: value === 'none' ? undefined : value }))}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select MRR band" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     <SelectItem value="0-100">$0 - $100</SelectItem>
                     <SelectItem value="100-500">$100 - $500</SelectItem>
                     <SelectItem value="500-1000">$500 - $1,000</SelectItem>
@@ -1701,15 +1701,15 @@ export default function PlatformSubscribers() {
               
               <div className="space-y-2">
                 <Label htmlFor="churnRisk">Churn Risk</Label>
-                <Select 
-                  value={generalUpdateData.churnRisk || ''} 
-                  onValueChange={(value) => setGeneralUpdateData(prev => ({ ...prev, churnRisk: value }))}
+                <Select
+                  value={generalUpdateData.churnRisk || 'none'}
+                  onValueChange={(value) => setGeneralUpdateData(prev => ({ ...prev, churnRisk: value === 'none' ? undefined : value }))}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select churn risk" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     <SelectItem value="low">Low</SelectItem>
                     <SelectItem value="medium">Medium</SelectItem>
                     <SelectItem value="high">High</SelectItem>
@@ -1720,15 +1720,15 @@ export default function PlatformSubscribers() {
 
             <div className="space-y-2">
               <Label htmlFor="assignedCsmId">Assigned CSM</Label>
-              <Select 
-                value={generalUpdateData.assignedCsmId || ''} 
-                onValueChange={(value) => setGeneralUpdateData(prev => ({ ...prev, assignedCsmId: value || undefined }))}
+              <Select
+                value={generalUpdateData.assignedCsmId || 'unassigned'}
+                onValueChange={(value) => setGeneralUpdateData(prev => ({ ...prev, assignedCsmId: value === 'unassigned' ? undefined : value }))}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select CSM" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Unassigned</SelectItem>
+                  <SelectItem value="unassigned">Unassigned</SelectItem>
                   {availableCSMs.map(csm => (
                     <SelectItem key={csm.id} value={csm.id}>
                       {csm.name} ({csm.email})

@@ -35,8 +35,8 @@ export default function PlatformUsers() {
   const [users, setUsers] = useState<PlatformUserSummary[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<PlatformUserSummary[]>([]);
   const { searchTerm, setSearchTerm } = useFilters();
-  const [roleFilter, setRoleFilter] = useState<PlatformRoleCode | ''>('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [roleFilter, setRoleFilter] = useState<PlatformRoleCode | ''>('all');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
   const [availableRoles, setAvailableRoles] = useState<PlatformRoleCode[]>([]);
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -122,11 +122,11 @@ export default function PlatformUsers() {
       );
     }
 
-    if (roleFilter) {
+    if (roleFilter !== 'all') {
       filtered = filtered.filter(user => user.roles.includes(roleFilter));
     }
 
-    if (statusFilter) {
+    if (statusFilter !== 'all') {
       filtered = filtered.filter(user => user.status === statusFilter);
     }
 
@@ -593,7 +593,7 @@ export default function PlatformUsers() {
                   <SelectValue placeholder="All roles" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Roles</SelectItem>
+                  <SelectItem value="all">All Roles</SelectItem>
                   {availableRoles.map(role => (
                     <SelectItem key={role} value={role}>
                       {role.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
@@ -610,7 +610,7 @@ export default function PlatformUsers() {
                   <SelectValue placeholder="All statuses" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Statuses</SelectItem>
+                  <SelectItem value="all">All Statuses</SelectItem>
                   <SelectItem value="active">Active</SelectItem>
                   <SelectItem value="disabled">Disabled</SelectItem>
                 </SelectContent>

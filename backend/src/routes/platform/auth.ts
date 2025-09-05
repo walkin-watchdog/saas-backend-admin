@@ -77,7 +77,11 @@ router.post('/login', platformLoginIpLimiter, platformLoginIdLimiter, async (req
       secure: isSecure,
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
-    res.json({ access: result.access, user: result.user, csrfToken: csrf });
+    res.json({
+      access: result.access,
+      user: { ...result.user, status: result.user.status },
+      csrfToken: csrf,
+    });
   } catch (error) {
     const e = error as any;
     const message = (e as Error).message;
@@ -92,7 +96,7 @@ router.post('/login', platformLoginIpLimiter, platformLoginIdLimiter, async (req
     }
     if (message === 'Captcha verification failed') return res.status(400).json({ error: message });
     if (message === 'Access denied from this IP address') return res.status(403).json({ error: message });
-    if (['Invalid credentials', 'Account disabled', 'Invalid MFA code', 'Password not set. Please use invite link.'].includes(message)) {
+    if (['Invalid credentials', 'Invalid username', 'Account disabled', 'Invalid MFA code', 'Password not set. Please use invite link.'].includes(message)) {
       // On soft lock parity, surface 423 if provided
       if (e?.locked) return res.status(423).json({ error: 'Account temporarily locked. Try again later.' });
       return res.status(401).json({ error: message });

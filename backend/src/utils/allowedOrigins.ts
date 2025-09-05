@@ -3,7 +3,7 @@ const envList = (v?: string): string[] =>
 
 export const allowedOrigins: string[] = [
   process.env.FRONTEND_URL || 'http://localhost:5174',
-  process.env.ADMIN_URL || 'http://localhost:5173',
+  process.env.ADMIN_URL || 'http://localhost:8080',
   ...envList(process.env.ALLOWED_ORIGINS),
 ].filter(Boolean);
 

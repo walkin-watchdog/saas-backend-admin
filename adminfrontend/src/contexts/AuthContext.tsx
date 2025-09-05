@@ -252,6 +252,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       const { passwordHash: _ph, ...userData } = user as any;
       setPlatformUser({
         ...userData,
+        status: userData.status,
         roles: userData.roles as PlatformRoleCode[],
         permissions: userData.permissions || [],
       });
@@ -261,6 +262,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       setPlatformCsrf(csrfToken);
       sessionStorage.setItem('platform_access_token', access);
       sessionStorage.setItem('platform_csrf_token', csrfToken);
+      await checkPlatformAccess();
     } catch (err) {
       console.error('Platform login failed:', err);
       throw err;
@@ -308,6 +310,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     setPlatformCsrf(null);
     sessionStorage.removeItem('platform_access_token');
     sessionStorage.removeItem('platform_csrf_token');
+    window.location.href = '/platform/login';
   };
 
   const refreshPlatformUser = async (): Promise<void> => {

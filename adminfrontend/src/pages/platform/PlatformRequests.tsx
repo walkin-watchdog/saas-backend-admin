@@ -27,8 +27,8 @@ export default function PlatformRequests() {
   const { searchTerm, setSearchTerm } = useFilters();
   const { currentPage, pageSize, setCurrentPage } = usePagination();
   const { selectedItems, setSelectedItems, addSelectedItem, removeSelectedItem, clearSelection } = useSelection();
-  const [kindFilter, setKindFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [kindFilter, setKindFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
   const [selectedRequest, setSelectedRequest] = useState<PlatformRequest | null>(null);
   const [showConvertModal, setShowConvertModal] = useState(false);
@@ -98,8 +98,8 @@ export default function PlatformRequests() {
       const filters: RequestFilters = {
         offset,
         limit: pageSize + 1,
-        kind: (kindFilter as 'contact' | 'trial' | 'enterprise') || undefined,
-        status: (statusFilter as 'new' | 'rejected' | 'in_review' | 'converted') || undefined
+        kind: (kindFilter !== 'all' ? kindFilter as 'contact' | 'trial' | 'enterprise' : undefined),
+        status: (statusFilter !== 'all' ? statusFilter as 'new' | 'rejected' | 'in_review' | 'converted' : undefined)
       };
       const data = await requestsApi.list(filters);
       setHasMore(data.data.length > pageSize);
@@ -137,11 +137,11 @@ export default function PlatformRequests() {
       );
     }
 
-    if (kindFilter) {
+    if (kindFilter !== 'all') {
       filtered = filtered.filter(request => request.kind === kindFilter);
     }
 
-    if (statusFilter) {
+    if (statusFilter !== 'all') {
       filtered = filtered.filter(request => request.status === statusFilter);
     }
 
@@ -418,7 +418,7 @@ export default function PlatformRequests() {
                   <SelectValue placeholder="All types" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Types</SelectItem>
+                  <SelectItem value="all">All Types</SelectItem>
                   <SelectItem value="contact">Contact</SelectItem>
                   <SelectItem value="trial">Trial Request</SelectItem>
                   <SelectItem value="enterprise">Enterprise</SelectItem>
@@ -433,7 +433,7 @@ export default function PlatformRequests() {
                   <SelectValue placeholder="All statuses" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Statuses</SelectItem>
+                  <SelectItem value="all">All Statuses</SelectItem>
                   <SelectItem value="new">New</SelectItem>
                   <SelectItem value="in_review">In Review</SelectItem>
                   <SelectItem value="converted">Converted</SelectItem>
@@ -458,7 +458,7 @@ export default function PlatformRequests() {
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    setStatusFilter('');
+                    setStatusFilter('all');
                   }}
                 >
                   All

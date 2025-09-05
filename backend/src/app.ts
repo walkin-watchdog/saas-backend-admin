@@ -54,6 +54,7 @@ import invoiceRoutes from './routes/billing/invoices';
 import platformRoutes from './routes/platform';
 import platformAuthRoutes from './routes/platform/auth';
 import { secureInvoiceRouter as platformInvoiceSecureRoutes } from './routes/platform/invoices';
+import impersonateRoutes from './routes/impersonate';
 import opsRoutes from './routes/ops';
 import metricsRoutes from './routes/metrics';
 import { allowedOriginsSet, isAllowedOrigin } from './utils/allowedOrigins';
@@ -153,7 +154,7 @@ const corsOptions = {
   },
   credentials: true,
   methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
-  allowedHeaders: ['Authorization','Content-Type','X-Requested-With','If-Match','x-api-key','x-csrf-token','X-CSRF-Token'],
+  allowedHeaders: ['Authorization','Content-Type','X-Requested-With','If-Match','x-api-key','x-csrf-token','X-CSRF-Token','Idempotency-Key'],
   exposedHeaders: ['Retry-After','ETag','RateLimit-Limit','RateLimit-Remaining','RateLimit-Reset'],
 };
 
@@ -190,6 +191,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/api/platform/invoices/secure', platformInvoiceSecureRoutes);
 app.use('/api/platform/auth', platformAuthLimiter, platformAuthRoutes);
 app.use('/api/platform', platformLimiter, platformRoutes);
+app.use('/api/impersonate', routePath, impersonateRoutes);
 
 // Tenant resolution middleware (before auth)
 app.use(resolveTenant);

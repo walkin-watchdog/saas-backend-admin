@@ -175,7 +175,7 @@ router.post('/login', loginIpLimiter, loginIdLimiter, async (req: TenantRequest,
         res.setHeader('Retry-After', String(delay));
         return res.status(429).json({ error: 'Too many attempts, please try again later.' });
       }
-      return res.status(401).json({ error: 'Invalid credentials' });
+      return res.status(401).json({ error: 'Invalid username' });
     }
 
     const passwordValid = await bcrypt.compare(password, user.password);
@@ -423,23 +423,39 @@ router.post('/refresh', refreshLimiter, async (req: TenantRequest, res) => {
     return res.sendStatus(401);
   }
 
-  const user = await UserService.findUserById(payload.sub);
-  if (!user || user.tokenVersion !== payload.tokenVersion) {
-    logger.warn('auth.refresh_failed', {
-      tenantId: req.tenantId,
-      userId: payload.sub,
-      reason: !user ? 'user_not_found' : 'token_version_mismatch',
-      ip: realIp(req),
-    });
-    return res.sendStatus(401);
+  if (payload.impersonation) {
+    const { ImpersonationService } = await import('../services/impersonationService');
+    const valid = await ImpersonationService.validateGrant(payload.impersonation.jti);
+    if (!valid) {
+      logger.warn('auth.refresh_failed', {
+        tenantId: req.tenantId,
+        userId: payload.sub,
+        reason: 'impersonation_grant_invalid',
+        ip: realIp(req),
+      });
+      return res.sendStatus(401);
+    }
+  } else {
+    const user = await UserService.findUserById(payload.sub);
+    if (!user || user.tokenVersion !== payload.tokenVersion) {
+      logger.warn('auth.refresh_failed', {
+        tenantId: req.tenantId,
+        userId: payload.sub,
+        reason: !user ? 'user_not_found' : 'token_version_mismatch',
+        ip: realIp(req),
+      });
+      return res.sendStatus(401);
+    }
   }
 
-  await addToBlacklist({
-    tenantId: req.tenantId!,
-    userId: payload.sub,
-    jti: payload.jti,
-    exp: new Date(payload.exp! * 1000),
-  });
+  if (!payload.sub.startsWith('impersonation:')) {
+    await addToBlacklist({
+      tenantId: req.tenantId!,
+      userId: payload.sub,
+      jti: payload.jti,
+      exp: new Date(payload.exp! * 1000),
+    });
+  }
 
   const newJti = crypto.randomUUID();
   const rfid = payload.rfid ?? crypto.randomUUID();
@@ -449,6 +465,7 @@ router.post('/refresh', refreshLimiter, async (req: TenantRequest, res) => {
     role: payload.role,
     tokenVersion: payload.tokenVersion,
     platformAdmin: payload.platformAdmin,
+    impersonation: payload.impersonation,
   };
   const refreshClaims = { ...accessClaims, rfid };
   const access = signAccess(accessClaims, newJti);
@@ -525,21 +542,23 @@ router.post('/logout', async (req: TenantRequest, res) => {
   const token = req.cookies.rt;
   if (token) {
     const { jti, exp, sub } = verifyRefresh(token);
-    try {
-      await addToBlacklist({
-        tenantId: req.tenantId!,
-        userId: sub,
-        jti,
-        exp: new Date(exp! * 1000),
-      });
-    } catch (err) {
-      if (
-        (err as any).name === 'PrismaClientKnownRequestError' &&
-        (err as any).code === 'P2002'
-      ) {
-        // duplicate jti, ignore
-      } else {
-        throw err;
+    if (!sub.startsWith('impersonation:')) {
+      try {
+        await addToBlacklist({
+          tenantId: req.tenantId!,
+          userId: sub,
+          jti,
+          exp: new Date(exp! * 1000),
+        });
+      } catch (err) {
+        if (
+          (err as any).name === 'PrismaClientKnownRequestError' &&
+          (err as any).code === 'P2002'
+        ) {
+          // duplicate jti, ignore
+        } else {
+          throw err;
+        }
       }
     }
   }
@@ -760,16 +779,6 @@ router.get('/users', authenticate, authorize(['ADMIN']), async (req: AuthRequest
   }
 });
 
-// Check if admin exists (public endpoint)
-router.get('/check-admin', async (req: TenantRequest, res, next) => {
-  try {
-    const adminCount = await UserService.countUsers({ role: 'ADMIN' });
-    
-    res.json({ exists: adminCount > 0 });
-  } catch (error) {
-    next(error);
-  }
-});
 // Get user by ID (Admin only)
 router.get('/users/:id', authenticate, authorize(['ADMIN']), async (req: AuthRequest & TenantRequest, res, next) => {
   try {

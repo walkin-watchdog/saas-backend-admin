@@ -3,6 +3,7 @@ import request from 'supertest';
 import { prisma } from '../src/utils/prisma';
 import { app } from '../src/app';
 import { signRefresh } from '../src/utils/jwt';
+import * as blacklist from '../src/utils/blacklist';
 
 describe('Auth logout', () => {
   let tenant: any;
@@ -69,5 +70,34 @@ describe('Auth logout', () => {
     expect(String(csrfClear)).toMatch(/(Max-Age=0|Expires=[^;]*1970)/i);
     expect(String(csrfClear)).toMatch(/Path=\//i);
     expect(String(csrfClear)).toMatch(/SameSite=Strict/i);
+  });
+
+  test('impersonation token logout skips blacklist insert', async () => {
+    const addSpy = jest.spyOn(blacklist, 'addToBlacklist').mockResolvedValue(undefined as any);
+
+    const rt = signRefresh({
+      sub: `impersonation:${user.id}`,
+      tenantId: tenant.id,
+      role: user.role,
+      tokenVersion: user.tokenVersion,
+      platformAdmin: !!user.platformAdmin,
+      impersonation: {
+        platformUserId: 'PU',
+        scope: 'full_tenant_admin',
+        reason: 't',
+        grantId: 'G',
+        jti: 'IJTI',
+      },
+    });
+
+    const csrf = 'bye456';
+    const res = await request(app)
+      .post('/api/auth/logout')
+      .set('x-api-key', tenant.apiKey)
+      .set('Cookie', [`rt=${rt}`, `csrf=${csrf}`])
+      .set('x-csrf-token', csrf);
+
+    expect(res.status).toBe(204);
+    expect(addSpy).not.toHaveBeenCalled();
   });
 });

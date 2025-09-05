@@ -13,6 +13,13 @@ export interface TokenClaims {
   role: UserRole;
   tokenVersion: number;
   platformAdmin?: boolean;
+  impersonation?: {
+    platformUserId: string;
+    scope: 'read_only' | 'billing_support' | 'full_tenant_admin';
+    reason: string;
+    grantId: string;
+    jti: string; // impersonation grant jti
+  };
   rfid?: string;
   jti: string;
   iat?: number;

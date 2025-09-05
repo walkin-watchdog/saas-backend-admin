@@ -29,7 +29,7 @@ export const Invoices = () => {
   const [isGeneratingPdf, setIsGeneratingPdf] = useState<string | null>(null);
   
   // Filters
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('');
   const [endDateFilter, setEndDateFilter] = useState('');
   
@@ -53,7 +53,7 @@ export const Invoices = () => {
       const filters: InvoiceFilters = {
         limit: pageSize,
         offset: (currentPage - 1) * pageSize,
-        ...(statusFilter && { status: statusFilter }),
+        ...(statusFilter !== 'all' && { status: statusFilter }),
         ...(dateFilter && { startDate: dateFilter }),
         ...(endDateFilter && { endDate: endDateFilter })
       };
@@ -167,7 +167,7 @@ export const Invoices = () => {
                   <SelectValue placeholder="All statuses" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Statuses</SelectItem>
+                  <SelectItem value="all">All Statuses</SelectItem>
                   <SelectItem value="draft">Draft</SelectItem>
                   <SelectItem value="sent">Sent</SelectItem>
                   <SelectItem value="paid">Paid</SelectItem>

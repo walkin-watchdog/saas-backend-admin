@@ -41,7 +41,7 @@ export class PlatformAuthService {
       await bcrypt.compare(password, DUMMY_HASH);
       await AuditService.log({ action: 'platform.auth.login_failed', ipAddress: clientIp, reason: 'user_not_found', changes: { email } });
       const { delay, locked } = await recordFailure('platform', userKey, clientIp);
-      const err: any = new Error('Invalid credentials');
+      const err: any = new Error('Invalid username');
       if (locked) {
         err.status = 423;
         err.retryAfterSec = delay;
@@ -167,6 +167,7 @@ export class PlatformAuthService {
         email: user.email,
         name: user.name,
         roles,
+        status: user.status,
         permissions,
       },
     };

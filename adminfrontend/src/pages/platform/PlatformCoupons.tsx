@@ -62,8 +62,8 @@ export default function PlatformCoupons() {
   const [previewCurrency, setPreviewCurrency] = useState<'USD' | 'INR'>('USD');
   
   const [filters, setFilters] = useState({
-    type: '',
-    active: ''
+    type: 'all',
+    active: 'all'
   });
 
   useEffect(() => {
@@ -77,8 +77,8 @@ export default function PlatformCoupons() {
       const apiFilters: CouponFilters = {
         limit: pageSize + 1,
         offset,
-        active: filters.active ? filters.active === 'true' : undefined,
-        type: filters.type as 'percent' | 'fixed' || undefined,
+        active: filters.active !== 'all' ? filters.active === 'true' : undefined,
+        type: filters.type !== 'all' ? filters.type as 'percent' | 'fixed' : undefined,
       };
 
       const { data } = await couponsApi.list(apiFilters);
@@ -343,7 +343,7 @@ export default function PlatformCoupons() {
                   <SelectValue placeholder="Type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Types</SelectItem>
+                  <SelectItem value="all">All Types</SelectItem>
                   <SelectItem value="percent">Percentage</SelectItem>
                   <SelectItem value="fixed">Fixed Amount</SelectItem>
                 </SelectContent>
@@ -355,7 +355,7 @@ export default function PlatformCoupons() {
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Status</SelectItem>
+                  <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="true">Active</SelectItem>
                   <SelectItem value="false">Inactive</SelectItem>
                 </SelectContent>

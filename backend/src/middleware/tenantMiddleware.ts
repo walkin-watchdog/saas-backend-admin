@@ -44,7 +44,8 @@ export const resolveTenant = async (req: TenantRequest, res: Response, next: Nex
     let tenant: TenantContext | undefined;
     let jwtTenant: TenantContext | undefined;
     let headerTenant: TenantContext | undefined;
-      try {
+    let skipHeaderTenant = false;
+    try {
         // 0) Prefer Authorization: Bearer <jwt> when available (service-to-service / tests)
         const auth = req.headers.authorization;
         if (auth?.startsWith('Bearer ')) {
@@ -53,6 +54,9 @@ export const resolveTenant = async (req: TenantRequest, res: Response, next: Nex
           try {
             const claims = verifyAccess(raw); // throws on invalid signature/exp
             claimsTenantId = claims.tenantId;
+            if (claims.impersonation) {
+              skipHeaderTenant = true;
+            }
           } catch {
             try {
               const imp: ImpersonationTokenClaims = verifyImpersonationToken(raw, 'tenant-api');
@@ -61,6 +65,7 @@ export const resolveTenant = async (req: TenantRequest, res: Response, next: Nex
               const valid = await ImpersonationService.validateGrant(imp.jti);
               if (valid) {
                 claimsTenantId = imp.tenantId;
+                skipHeaderTenant = true;
               }
             } catch {
               // ignore
@@ -75,7 +80,9 @@ export const resolveTenant = async (req: TenantRequest, res: Response, next: Nex
         }
 
       // 1) Fall back to API key or Origin/Host mapping
-      headerTenant = await TenantService.fromOriginOrApiKey(req);
+      if (!skipHeaderTenant) {
+        headerTenant = await TenantService.fromOriginOrApiKey(req);
+      }
     } catch (err) {
       if (isDev && isAuth && !req.headers['x-api-key'] && !req.headers.origin) {
         const devTenantId = process.env.DEV_TENANT_ID;

@@ -31,7 +31,6 @@ import { Toaster } from './components/ui/toast';
 import { Gallery } from './pages/Gallery';
 import { ContentIndex } from './pages/content/ContentIndex';
 import { NotFound } from './pages/NotFound';
-import { GetStarted } from './pages/GetStarted';
 import { BookingDetails } from './pages/BookingDetails'
 import { Proposals } from './pages/Proposals';
 import { ProposalEditor } from './pages/ProposalEditor';
@@ -47,6 +46,7 @@ import { setupPreconditionInterceptor } from './utils/preconditionHandler';
 import { TwoFactorSetup } from './pages/TwoFactorSetup';
 import { TenantStepUpAuth } from './components/ui/TenantStepUpAuth';
 import OAuth2fa from './pages/OAuth2fa';
+import { Impersonate } from './pages/Impersonate';
 
 function PreconditionWrapper({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
@@ -83,34 +83,6 @@ function PreconditionWrapper({ children }: { children: React.ReactNode }) {
   );
 }
 
-function AdminCheckRoute({ children }: { children: React.ReactElement }) {
-  const [allowed, setAllowed] = useState<boolean | null>(null);
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(
-          `${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/auth/check-admin`
-        );
-        const { exists } = await res.json();
-        if (exists && !cancelled) {
-          navigate('/404', { replace: true });
-        } else if (!cancelled) {
-          setAllowed(true);
-        }
-      } catch {
-        if (!cancelled) setAllowed(true);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [navigate]);
-
-  if (allowed === null) return null;
-  return children;
-}
-
 function App() {
   return (
     <AuthProvider>
@@ -132,17 +104,10 @@ function App() {
                   } />
 
                   {/* Existing routes */}
-                  <Route
-                    path="/get-started"
-                    element={
-                      <AdminCheckRoute>
-                        <GetStarted />
-                      </AdminCheckRoute>
-                    }
-                  />
                   <Route path="/login" element={<Login />} />
                   <Route path="/forgot-password" element={<ForgotPassword />} />
                   <Route path="/reset-password" element={<ResetPassword />} />
+                  <Route path="/impersonate/:token" element={<Impersonate />} />
                   <Route path="/oauth/verify" element={<Navigate to="/oauth/2fa" replace />} />
                   <Route path="/" element={
                     <ProtectedRoute>
