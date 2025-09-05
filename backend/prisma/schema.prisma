@@ -1,0 +1,1582 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id            String   @id @default(cuid())
+  name          String
+  status        String   @default("active") // active, suspended, pending
+  dedicated     Boolean  @default(false)
+  datasourceUrl String?
+  dbName        String?
+  apiKey        String   @unique @default(uuid()) // Public API key for tenant
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // All tenant-scoped models
+  users                 User[]
+  products              Product[]
+  itineraries           Itinerary[]
+  itineraryActivities   ItineraryActivity[]
+  packages              Package[]
+  packageSlots          PackageSlot[]
+  slotAdultTiers        SlotAdultTier[]
+  slotChildTiers        SlotChildTier[]
+  availabilitySubranges ProductAvailabilitySubrange[]
+  blockedDates          BlockedDate[]
+  couponUsages          CouponUsage[]
+  destinations          Destination[]
+  attractions           Attraction[]
+  experienceCategories  ExperienceCategory[]
+  teamMembers           TeamMember[]
+  partners              partners[]
+  home                  home[]
+  logo                  logo[]
+  slides                slides[]
+  faqs                  FAQ[]
+  jobPostings           JobPosting[]
+  itineraryProposals    ItineraryProposal[]
+  proposalRevisions     ItineraryProposalRevision[]
+  proposalShares        ProposalShare[]
+  coupons               Coupon[]
+  tripRequests          TripRequest[]
+  newsletters           Newsletter[]
+  abandonedCarts        AbandonedCart[]
+  reviews               Review[]
+  bookings              Booking[]
+  payments              Payment[]
+  domains               TenantDomain[]
+  refreshTokens         RefreshTokenBlacklist[]
+  idempotencyKeys       IdempotencyKey[]
+  configs               TenantConfig[]
+  subscriptions         Subscription[]
+  invoices              Invoice[]
+  paymentMethods        PaymentMethod[]
+  usageRecords          UsageRecord[]
+  subscriber            Subscriber?
+
+  offboardingJob OffboardingJob? @relation("TenantOffboardingJobs")
+  @@map("tenants")
+}
+
+model GlobalConfig {
+  id         String   @id @default(cuid())
+  scope      String   @default("global")
+  key        String
+  data       Json?
+  secretData String?
+  expiresAt  DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([scope, key])
+  @@map("global_configs")
+}
+
+model TenantDomain {
+  id        String   @id @default(cuid())
+  tenantId  String
+  domain    String   @unique
+  isActive  Boolean  @default(true)
+  isAdminHost Boolean @default(false)
+  verificationToken String?
+  verifiedAt DateTime?
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, isAdminHost], map: "tenant_domains_adminhost_idx")
+  @@index([verifiedAt], map: "tenant_domains_verified_idx")
+  @@unique([id, tenantId])
+  @@map("tenant_domains")
+}
+
+model RefreshTokenBlacklist {
+  jti      String
+  exp      DateTime
+  tenantId String
+  userId   String
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, userId, jti])
+  @@index([exp])
+  @@map("refresh_token_blacklist")
+}
+
+model User {
+  id               String                      @id @default(cuid())
+  tenantId         String
+  email            String
+  password         String
+  name             String
+  role             UserRole                    @default(VIEWER)
+  platformAdmin    Boolean                     @default(false)
+  tokenVersion     Int                         @default(0)
+  twoFaEnabled     Boolean                     @default(false)
+  twoFaSecret      String?
+  twoFaRecoveryCodes String[]                  @default([])
+  failedLoginCount Int                         @default(0)
+  lockoutUntil     DateTime?
+  resetToken       String?
+  resetTokenExpiry DateTime?
+  emailVerified    Boolean                    @default(true)
+  verificationToken String?
+  verificationTokenExpiry DateTime?
+  createdAt        DateTime                    @default(now())
+  updatedAt        DateTime                    @updatedAt
+  bookingsCreated  Booking[]                   @relation("BookingCreatedBy")
+  proposalsCreated ItineraryProposal[]         @relation("ProposalCreatedBy")
+  proposalsOwned   ItineraryProposal[]         @relation("ProposalOwnedBy")
+  revisionsCreated ItineraryProposalRevision[] @relation("RevisionCreatedBy")
+  refreshTokens   RefreshTokenBlacklist[]
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([tenantId, role], map: "users_tenant_role_idx")
+  @@map("users")
+}
+
+// Platform Admin Models
+model PlatformUser {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  name              String
+  status            String   @default("active") // active, disabled
+  mfaEnabled        Boolean  @default(false)
+  mfaVerifiedAt     DateTime?
+  twoFaSecret       String?
+  twoFaRecoveryCodes String[] @default([])
+  lastLoginAt       DateTime?
+  ipAllowlist       String[] @default([])
+  ssoSubject        String?
+  passwordHash      String?
+  passwordUpdatedAt DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  roles           PlatformUserRole[]
+  invitesCreated  PlatformInvite[]    @relation("InviteCreatedBy")
+  couponsCreated  PlatformCoupon[]    @relation("CouponCreatedBy")
+  creditNotesIssued CreditNote[]      @relation("CreditNoteIssuedBy")
+  kycReviews      KycRecord[]         @relation("KycReviewedBy")
+  impersonationGrants ImpersonationGrant[] @relation("ImpersonationIssuedBy")
+  couponRedemptions CouponRedemption[] @relation("CouponRedeemedBy")
+  requestsAssigned        RequestFormSubmission[] @relation("RequestAssignedTo")
+  offboardingJobsInitiated OffboardingJob[]       @relation("OffboardingInitiatedBy")
+
+  sessions        PlatformSession[]
+
+  @@index([status])
+  @@index([email])
+  @@map("platform_users")
+}
+
+model PlatformSession {
+  id             String   @id @default(cuid())
+  platformUserId String
+  jti            String   @unique
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user PlatformUser @relation(fields: [platformUserId], references: [id], onDelete: Cascade)
+
+  @@index([platformUserId])
+  @@index([expiresAt])
+  @@map("platform_sessions")
+}
+
+model PlatformRole {
+  id          String @id @default(cuid())
+  code        String @unique
+  name        String
+  description String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users       PlatformUserRole[]
+  permissions PlatformRolePermission[]
+
+  @@index([code])
+  @@map("platform_roles")
+}
+
+model PlatformUserRole {
+  platformUserId String
+  platformRoleId String
+  assignedAt     DateTime @default(now())
+
+  user PlatformUser @relation(fields: [platformUserId], references: [id], onDelete: Cascade)
+  role PlatformRole @relation(fields: [platformRoleId], references: [id], onDelete: Cascade)
+
+  @@id([platformUserId, platformRoleId])
+  @@index([platformUserId])
+  @@index([platformRoleId])
+  @@map("platform_user_roles")
+}
+
+model PlatformPermission {
+  id          String @id @default(cuid())
+  code        String @unique
+  description String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  roles PlatformRolePermission[]
+
+  @@index([code])
+  @@map("platform_permissions")
+}
+
+model PlatformRolePermission {
+  platformRoleId String
+  permissionId   String
+  grantedAt      DateTime @default(now())
+  updatedAt      DateTime @default(now()) @updatedAt
+
+  role       PlatformRole       @relation(fields: [platformRoleId], references: [id], onDelete: Cascade)
+  permission PlatformPermission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([platformRoleId, permissionId])
+  @@index([platformRoleId])
+  @@index([permissionId])
+  @@map("platform_role_permissions")
+}
+
+model PlatformInvite {
+  id         String    @id @default(cuid())
+  email      String
+  invitedById String
+  roleCodes  String[]
+  token      String    @unique
+  expiresAt  DateTime
+  acceptedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  invitedBy PlatformUser @relation("InviteCreatedBy", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([email])
+  @@index([token])
+  @@index([expiresAt])
+  @@map("platform_invites")
+}
+
+model Subscriber {
+  tenantId      String   @unique
+  displayName   String
+  ownerEmail    String
+  billingStatus String   @default("trialing") // trialing, active, past_due, cancelled, suspended
+  kycStatus     String   @default("pending")  // pending, verified, rejected
+  tags          String[] @default([])
+  notes         String?
+  assignedCsmId String?
+  mrrBand       String? // low, mid, high, enterprise
+  churnRisk     String? // low, medium, high
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([billingStatus])
+  @@index([kycStatus])
+  @@index([assignedCsmId])
+  @@index([mrrBand])
+  @@index([churnRisk])
+  @@map("subscribers")
+}
+
+model PlatformCoupon {
+  id                String @id @default(cuid())
+  code              String @unique
+  type              String // percent, fixed
+  amount            Float
+  amountUsd         Float?
+  amountInr         Float?
+  currency          String? @default("USD")
+  duration          String // once, repeating, forever
+  durationInMonths  Int?
+  appliesToPlanIds  String[] @default([])
+  maxRedemptions    Int?
+  redeemBy          DateTime?
+  active            Boolean @default(true)
+  createdById       String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  createdBy  PlatformUser       @relation("CouponCreatedBy", fields: [createdById], references: [id])
+  redemptions CouponRedemption[]
+  entitlements CouponEntitlement[]
+
+  @@index([code])
+  @@index([active])
+  @@index([createdById])
+  @@map("platform_coupons")
+}
+
+model CouponRedemption {
+  id                      String   @id @default(cuid())
+  couponId                String
+  tenantId                String
+  subscriptionId          String?
+  invoiceId               String?
+  redeemedAt              DateTime @default(now())
+  redeemedByPlatformUserId String?
+  amountApplied           Float
+  currency                String   @default("USD")
+  redemptionKey           String   @unique
+
+  coupon     PlatformCoupon @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  redeemedBy PlatformUser?  @relation("CouponRedeemedBy", fields: [redeemedByPlatformUserId], references: [id], onDelete: SetNull)
+
+  @@index([couponId])
+  @@index([tenantId])
+  @@index([subscriptionId])
+  @@index([redemptionKey])
+  @@map("coupon_redemptions")
+}
+
+model CouponEntitlement {
+  id             String   @id @default(cuid())
+  tenantId       String
+  subscriptionId String
+  couponId       String
+  remainingPeriods Int?
+  unlimited      Boolean @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  coupon       PlatformCoupon @relation(fields: [couponId], references: [id], onDelete: Cascade)
+
+  @@unique([subscriptionId, couponId])
+  @@index([tenantId])
+  @@map("coupon_entitlements")
+}
+
+model CreditNote {
+  id        String   @id @default(cuid())
+  tenantId  String
+  amount    Float
+  currency  String   @default("USD")
+  reason    String
+  issuedById String
+  invoiceId String?
+  note      String?
+  status    String   @default("open")
+  appliedAt DateTime?
+  cancelledAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  issuedBy PlatformUser @relation("CreditNoteIssuedBy", fields: [issuedById], references: [id])
+
+  @@index([tenantId])
+  @@index([issuedById])
+  @@index([invoiceId])
+  @@map("credit_notes")
+}
+
+model Order {
+  id           String    @id @default(cuid())
+  tenantId     String
+  type         String    // invoice, refund, adjustment
+  gateway      String    // razorpay, paypal
+  gatewayRefId String?
+  status       String
+  total        Float
+  currency     String    @default("USD")
+  periodStart  DateTime?
+  periodEnd    DateTime?
+  metadata     Json?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([tenantId])
+  @@index([type])
+  @@index([status])
+  @@index([gateway])
+  @@index([gatewayRefId])
+  @@map("orders")
+}
+
+model Product {
+  id                        String       @id @default(cuid())
+  tenantId                  String
+  title                     String?      @default("")
+  productCode               String?
+  slug                      String?
+  description               String?      @default("")
+  type                      ProductType? @default(TOUR)
+  category                  String?
+  location                  String?      @default("")
+  duration                  String?      @default("")
+  capacity                  Int?         @default(1)
+  minPeople                 Int?         @default(1)
+  tourType                  String?      @default("public")
+  highlights                String[]     @default([])
+  inclusions                String[]     @default([])
+  exclusions                String[]     @default([])
+  itineraries               Itinerary[]
+  images                    String[]     @default([])
+  tags                      String[]     @default([])
+  difficulty                String?
+  healthRestrictions        String[]     @default([])
+  accessibilityFeatures     String[]     @default([])
+  wheelchairAccessible      String       @default("no")
+  strollerAccessible        String       @default("no")
+  serviceAnimalsAllowed     String       @default("no")
+  publicTransportAccess     String       @default("no")
+  infantSeatsRequired       String       @default("no")
+  infantSeatsAvailable      String       @default("no")
+  guides                    Json?
+  languages                 String[]     @default([])
+  meetingPoint              String?
+  meetingPoints             Json[]       @default([])
+  doesTourEndAtMeetingPoint Boolean      @default(false)
+  endPoints                 Json[]       @default([])
+  pickupLocations           String[]     @default([])
+  // New pickup-related fields
+  pickupOption              String       @default("")
+  allowTravelersPickupPoint Boolean      @default(false)
+  pickupStartTime           String? // How long before departure
+  additionalPickupDetails   String?
+  pickupLocationDetails     Json[]       @default([])
+  cancellationPolicy        String?      @default("")
+  cancellationPolicyType    String?      @default("standard") // standard, moderate, strict, no_refund, custom
+  freeCancellationHours     Int?         @default(24)
+  partialRefundPercent      Int?         @default(50)
+  noRefundAfterHours        Int?         @default(12)
+  cancellationTerms         Json[]       @default([]) // Array of custom cancellation terms
+
+  // Additional Information Requirements
+  requirePhone                Boolean             @default(false)
+  requireId                   Boolean             @default(false)
+  requireAge                  Boolean             @default(false)
+  requireMedical              Boolean             @default(false)
+  requireDietary              Boolean             @default(false)
+  requireEmergencyContact     Boolean             @default(false)
+  requirePassportDetails      Boolean             @default(false)
+  passportDetailsOption       String?             @default("")
+  additionalRequirements      String? // Custom additional requirements text
+  customRequirementFields     Json[]              @default([]) // Array of custom requirement fields
+  phonenumber                 String?             @default("")
+  reserveNowPayLater          Boolean             @default(true)
+  cutoffTime                  Int?                @default(24) // Hours before tour start time when booking should be cut off
+  paymentType                 PaymentType         @default(FULL)
+  minimumPaymentPercent       Int?                @default(20)
+  depositAmount               Float?              @default(0)
+  isActive                    Boolean             @default(true)
+  isDraft                     Boolean             @default(false)
+  availabilityStartDate       DateTime?
+  availabilityEndDate         DateTime?
+  permanentAvailabilityStatus AvailabilityStatus?
+  destinationId               String?
+  experienceCategoryId        String?
+  createdAt                   DateTime            @default(now())
+  updatedAt                   DateTime            @updatedAt
+
+  tenant                Tenant                        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  packages              Package[]
+  bookings              Booking[]
+  reviews               Review[]
+  abandonedCarts        AbandonedCart[]
+  blockedDates          BlockedDate[]
+  availabilitySubranges ProductAvailabilitySubrange[]
+  destination           Destination?                  @relation(fields: [destinationId], references: [id])
+  experienceCategory    ExperienceCategory?           @relation(fields: [experienceCategoryId], references: [id])
+
+  @@unique([tenantId, productCode])
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@index([tenantId, isActive])
+  @@index([tenantId, type])
+  @@index([tenantId, location], map: "products_tenant_location_idx")
+  @@index([tenantId, category], map: "products_tenant_category_idx")
+  @@map("products")
+}
+
+model Itinerary {
+  id          String              @id @default(cuid())
+  tenantId    String
+  productId   String
+  day         Int
+  title       String
+  description String
+  activities  ItineraryActivity[]
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, productId], map: "itineraries_tenant_product_idx")
+  @@map("itineraries")
+}
+
+model ItineraryActivity {
+  id                  String   @id @default(cuid())
+  tenantId            String
+  itineraryId         String
+  attractionId        String?
+  location            String
+  locationLat         Float?
+  locationLng         Float?
+  locationPlaceId     String?
+  isStop              Boolean  @default(false)
+  description         String?  @default("")
+  stopDuration        Int?
+  duration            Int? // Duration figure (number only)
+  durationUnit        String?  @default("minutes") // "minutes" or "hours"
+  isAdmissionIncluded Boolean  @default(false) // New field for admission inclusion
+  inclusions          String[]
+  exclusions          String[]
+  order               Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  images              String[] @default([])
+
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  attraction Attraction? @relation(fields: [attractionId], references: [id], onDelete: SetNull)
+  itinerary  Itinerary   @relation(fields: [itineraryId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, itineraryId], map: "itinerary_activities_tenant_itinerary_idx")
+  @@map("itinerary_activities")
+}
+
+model Package {
+  id            String    @id @default(cuid())
+  tenantId      String
+  productId     String
+  name          String
+  description   String
+  basePrice     Float
+  discountType  String?   @default("none") // "none", "percentage", "fixed"
+  discountValue Float?    @default(0) // percentage or fixed amount
+  currency      String    @default("INR")
+  inclusions    String[]
+  maxPeople     Int
+  isActive      Boolean   @default(true)
+  startDate     DateTime  @default(now())
+  endDate       DateTime?
+  pricingType   String    @default("per_person") // "per_person" or "per_group"
+  ageGroups     Json?
+
+  tenant   Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product  Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  bookings Booking[]
+  slots    PackageSlot[]
+
+  @@index([tenantId])
+  @@index([tenantId, productId], map: "packages_tenant_product_idx")
+  @@index([tenantId, isActive], map: "packages_tenant_active_idx")
+  @@map("packages")
+}
+
+model PackageSlot {
+  id        String   @id @default(cuid())
+  tenantId  String
+  packageId String
+  Time      String[]
+  booked    Int      @default(0)
+  days      String[]
+
+  tenant     Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  package    Package         @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  bookings   Booking[]
+  adultTiers SlotAdultTier[] // Separate model for slot-specific tiers
+  childTiers SlotChildTier[] // Separate model for slot-specific tiers
+
+  @@index([tenantId])
+  @@index([packageId])
+  @@index([tenantId, packageId], map: "package_slots_tenant_package_idx")
+  @@map("package_slots")
+}
+
+// New models for slot-specific pricing
+model SlotAdultTier {
+  id       String  @id @default(cuid())
+  tenantId String
+  slotId   String
+  min      Int
+  max      Int
+  price    Float
+  isActive Boolean @default(true)
+
+  tenant Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  slot   PackageSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, slotId])
+  @@index([tenantId, slotId], map: "slot_adult_tiers_tenant_slot_idx")
+  @@map("slot_adult_tiers")
+}
+
+model SlotChildTier {
+  id       String  @id @default(cuid())
+  tenantId String
+  slotId   String
+  min      Int
+  max      Int
+  price    Float
+  isActive Boolean @default(true)
+
+  tenant Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  slot   PackageSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, slotId])
+  @@index([tenantId, slotId], map: "slot_child_tiers_tenant_slot_idx")
+  @@map("slot_child_tiers")
+}
+
+model Booking {
+  id                   String        @id @default(cuid())
+  tenantId             String
+  isManual             Boolean       @default(false)
+  createdById          String?
+  bookingCode          String
+  productId            String?
+  customDetails        Json?
+  packageId            String?
+  slotId               String?
+  customerName         String
+  customerEmail        String
+  customerPhone        String
+  adults               Int
+  children             Int           @default(0)
+  totalAmount          Float
+  partialPaymentAmount Float?        @default(0)
+  status               BookingStatus @default(PENDING)
+  paymentStatus        PaymentStatus @default(PENDING)
+  bookingDate          DateTime
+  selectedTimeSlot     String        @default("")
+  notes                String?
+  travellerDetails     Json?         @default("[]")
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  couponCode           String?
+  discountAmount       Float?
+  currency             String        @default("INR")
+
+  tenant    Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy User?              @relation("BookingCreatedBy", fields: [createdById], references: [id])
+  product   Product?           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  package   Package?           @relation(fields: [packageId], references: [id], onDelete: SetNull)
+  slot      PackageSlot?       @relation(fields: [slotId], references: [id], onDelete: SetNull)
+  proposal  ItineraryProposal?
+
+  payments Payment[]
+
+  @@unique([tenantId, bookingCode])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, paymentStatus])
+  @@index([tenantId, bookingDate], map: "bookings_tenant_date_idx")
+  @@index([tenantId, customerEmail], map: "bookings_tenant_email_idx")
+  @@map("bookings")
+}
+
+model ProductAvailabilitySubrange {
+  id        String         @id @default(cuid())
+  tenantId  String
+  productId String
+  startDate DateTime
+  endDate   DateTime
+  status    SubrangeStatus
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([productId, startDate, endDate])
+  @@index([tenantId, productId, startDate, endDate])
+  @@index([tenantId, productId], map: "availability_subrange_tenant_product_idx")
+}
+
+model Payment {
+  id                String        @id @default(cuid())
+  tenantId          String
+  bookingId         String
+  razorpayOrderId   String?
+  razorpayPaymentId String?
+  paypalOrderId     String?
+  paypalCaptureId   String?
+  amount            Float
+  currency          String        @default("INR")
+  status            PaymentStatus @default(PENDING)
+  paymentMethod     String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  idempotencyKey    String?
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  booking Booking @relation(fields: [bookingId], references: [id])
+
+  @@unique([tenantId, razorpayOrderId])
+  @@unique([tenantId, paypalOrderId])
+  @@unique([tenantId, paypalCaptureId])
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId])
+  @@index([tenantId, status], map: "payments_tenant_status_idx")
+  @@index([tenantId, createdAt], map: "payments_tenant_date_idx")
+  @@map("payments")
+}
+
+model IdempotencyKey {
+  key       String
+  method    String
+  endpoint  String
+  status    Int
+  response  Json
+  tenantId  String
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, key])
+  @@index([tenantId, endpoint, method])
+  @@map("idempotency_keys")
+}
+
+model PlatformIdempotencyKey {
+  key       String   @id
+  method    String
+  endpoint  String
+  status    Int
+  response  Json
+  createdAt DateTime @default(now())
+
+  @@index([endpoint, method])
+  @@map("platform_idempotency_keys")
+}
+
+model Review {
+  id         String   @id @default(cuid())
+  tenantId   String
+  productId  String
+  name       String
+  email      String
+  rating     Int
+  comment    String
+  isApproved Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, isApproved])
+  @@index([tenantId, productId])
+  @@map("reviews")
+}
+
+model Coupon {
+  id           String        @id @default(cuid())
+  tenantId     String
+  code         String        @db.VarChar(50)
+  description  String
+  type         CouponType
+  value        Float
+  minAmount    Float?
+  maxDiscount  Float?
+  usageLimit   Int?
+  usedCount    Int           @default(0)
+  isActive     Boolean       @default(true)
+  validFrom    DateTime
+  validUntil   DateTime
+  createdAt    DateTime      @default(now())
+  products     String[]      @default([])
+  usageHistory CouponUsage[]
+  currency     String        @default("INR")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@index([tenantId, isActive])
+  @@index([tenantId, validFrom, validUntil], map: "coupons_tenant_valid_idx")
+  @@map("coupons")
+}
+
+model CouponUsage {
+  id             String   @id @default(cuid())
+  couponId       String
+  bookingId      String?
+  bookingCode    String?
+  customerId     String?
+  customerName   String
+  customerEmail  String
+  discountAmount Float
+  createdAt      DateTime @default(now())
+  tenantId       String
+
+  coupon Coupon @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, couponId], map: "coupon_usage_tenant_coupon_idx")
+  @@index([tenantId, bookingId])
+  @@map("coupon_usage")
+}
+
+model TripRequest {
+  id              String        @id @default(cuid())
+  tenantId        String
+  name            String
+  email           String
+  phone           String
+  destination     String
+  startDate       DateTime
+  endDate         DateTime
+  adults          Int
+  children        Int           @default(0)
+  budget          String
+  interests       String[]
+  accommodation   String
+  transport       String
+  specialRequests String?
+  status          RequestStatus @default(PENDING)
+  createdAt       DateTime      @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@map("trip_requests")
+}
+
+model Newsletter {
+  id        String   @id @default(cuid())
+  tenantId  String
+  email     String
+  name      String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([tenantId, isActive], map: "newsletters_tenant_active_idx")
+  @@map("newsletters")
+}
+
+model AbandonedCart {
+  id              String    @id @default(cuid())
+  tenantId        String
+  email           String
+  productId       String
+  packageId       String?
+  slotId          String?
+  currency        String    @default("INR")
+  customerData    Json
+  remindersSent   Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  adminNotifiedAt DateTime?
+  recoverToken    String?   @unique
+  tokenExpiresAt  DateTime?
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, email], map: "abandoned_carts_tenant_email_idx")
+  @@map("abandoned_carts")
+}
+
+model BlockedDate {
+  id        String   @id @default(cuid())
+  tenantId  String
+  productId String
+  date      DateTime
+  reason    String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, productId, date])
+  @@index([tenantId, productId], map: "blocked_dates_tenant_product_idx")
+  @@map("blocked_dates")
+}
+
+enum UserRole {
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+enum ProductType {
+  TOUR
+  EXPERIENCE
+}
+
+enum AvailabilityStatus {
+  AVAILABLE
+  SOLD_OUT
+  NOT_OPERATING
+}
+
+enum SubrangeStatus {
+  SOLD_OUT
+  NOT_OPERATING
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  PARTIAL
+  PAID
+  FAILED
+  REFUNDED
+  CANCELLED
+  PARTIALLY_REFUNDED
+}
+
+enum PaymentType {
+  FULL
+  PARTIAL
+  DEPOSIT
+}
+
+enum CouponType {
+  PERCENTAGE
+  FIXED
+}
+
+enum RequestStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  CANCELLED
+}
+
+model Destination {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  lat         Float?
+  lng         Float?
+  placeId     String?
+  slug        String
+  tagline     String
+  description String
+  image       String
+  bannerImage String
+  highlights  String[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products    Product[]
+  attractions Attraction[]
+
+  @@unique([tenantId, name])
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@map("destinations")
+}
+
+model Attraction {
+  id            String   @id @default(cuid())
+  tenantId      String
+  name          String
+  location      String
+  lat           Float?
+  lng           Float?
+  placeId       String?
+  slug          String
+  tagline       String
+  description   String
+  image         String
+  bannerImage   String
+  duration      Int?
+  durationUnit  String?  @default("minutes")
+  destinationId String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  destination Destination         @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+  itineraries ItineraryActivity[]
+
+  @@unique([tenantId, name])
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@map("attractions")
+}
+
+model ExperienceCategory {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  slug        String
+  tagline     String
+  description String
+  image       String
+  bannerImage String
+  highlights  String[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products Product[]
+
+  @@unique([tenantId, name])
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@map("experience_categories")
+}
+
+model TeamMember {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  jobTitle    String
+  description String
+  imageUrl    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model partners {
+  id       String  @id @default(cuid())
+  tenantId String
+  imageUrl String?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("partners")
+}
+
+model home {
+  id       String  @id @default(cuid())
+  tenantId String
+  imageUrl String?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("home")
+}
+
+model logo {
+  id       String  @id @default(cuid())
+  tenantId String
+  imageUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("logo")
+}
+
+model slides {
+  id       String  @id @default(cuid())
+  tenantId String
+  imageUrl String?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("slides")
+}
+
+model FAQ {
+  id        String   @id @default(cuid())
+  tenantId  String
+  category  String
+  question  String
+  answer    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model JobPosting {
+  id               String   @id @default(cuid())
+  tenantId         String
+  title            String
+  department       String
+  location         String
+  type             String
+  description      String
+  responsibilities String[]
+  requirements     String[]
+  benefits         String[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+enum ProposalStatus {
+  DRAFT
+  SENT
+  REVISED
+  APPROVED
+  ARCHIVED
+}
+
+model ItineraryProposal {
+  id          String  @id @default(cuid())
+  tenantId    String
+  createdById String?
+  ownerId     String?
+  bookingId   String? @unique
+
+  customerName  String
+  customerEmail String
+  customerPhone String
+
+  startDate DateTime
+  endDate   DateTime?
+  adults    Int
+  children  Int       @default(0)
+  currency  String    @default("INR")
+
+  customDetails Json
+  status        ProposalStatus @default(DRAFT)
+  version       Int            @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy User?    @relation("ProposalCreatedBy", fields: [createdById], references: [id])
+  owner     User?    @relation("ProposalOwnedBy", fields: [ownerId], references: [id])
+  booking   Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  revisions ItineraryProposalRevision[]
+  shares    ProposalShare[]
+
+  @@index([tenantId])
+  @@index([tenantId, status, updatedAt])
+  @@map("itinerary_proposals")
+}
+
+model ItineraryProposalRevision {
+  id          String   @id @default(cuid())
+  tenantId    String
+  proposalId  String
+  version     Int
+  changeNote  String?
+  snapshot    Json
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  tenant    Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  proposal  ItineraryProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  createdBy User?             @relation("RevisionCreatedBy", fields: [createdById], references: [id])
+
+  @@index([proposalId, version])
+  @@index([tenantId])
+  @@map("itinerary_proposal_revisions")
+}
+
+model ProposalShare {
+  id         String    @id @default(cuid())
+  tenantId   String
+  proposalId String
+  token      String    @unique
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
+  accessedAt DateTime?
+
+  tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  proposal ItineraryProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, token])
+  @@index([token])
+  @@index([tenantId])
+  @@map("proposal_shares")
+}
+
+model TenantConfig {
+  id       String @id @default(cuid())
+  tenantId String
+  key      String
+  value    Json?
+  secret   String? // encrypted sensitive values
+  dek      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
+  @@index([tenantId, key])
+  @@map("tenant_configs")
+}
+
+// Update existing WebhookEvent to be compatible with new WebhookDelivery
+model WebhookEvent {
+  id          String   @id @default(cuid())
+  provider    String
+  eventId     String
+  payloadHash String
+  payload     Json
+  receivedAt  DateTime @default(now())
+  processedAt DateTime?
+  status      String   @default("pending")
+
+  @@unique([provider, eventId])
+  @@map("webhook_events")
+}
+
+model Plan {
+  id           String   @id @default(cuid())
+  code         String   @unique
+  billingFrequency  String
+  marketingName        String
+  marketingDescription String
+  featureHighlights    String[]
+  public      Boolean  @default(true)
+  active      Boolean  @default(true)
+  version     Int      @default(1)
+
+  subscriptions Subscription[]
+  prices        PlanPrice[]
+  @@index([public, active], map: "plans_public_active_idx")
+  @@map("plans")
+}
+
+model PlanPrice {
+  id        String  @id @default(cuid())
+  planId    String
+  currency  String
+  period    String
+  amountInt Int
+
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, currency, period])
+  @@map("plan_prices")
+}
+
+model Subscription {
+  id             String   @id @default(cuid())
+  tenantId       String
+  planId         String
+  currency       String   @default("USD")
+  status         String   @default("inactive")
+  platformCustomerId    String?
+  platformSubscriptionId String?
+  currentPeriodEnd DateTime?
+  trialStartedAt DateTime?
+  trialEndsAt    DateTime?
+  trialConvertedAt DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  dunningAttempts Int      @default(0)
+  dunningLastAttemptAt DateTime?
+  pastDueSince   DateTime?
+  scheduledPlanId   String?
+  scheduledPlanVersion Int?
+  scheduledChangeDate DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan   Plan   @relation(fields: [planId], references: [id])
+  invoices Invoice[]
+  couponEntitlements CouponEntitlement[]
+
+  @@index([tenantId], map: "subscriptions_tenant_idx")
+  @@index([tenantId, status], map: "subscriptions_tenant_status_idx")
+  @@index([platformSubscriptionId], map: "subscriptions_platform_sub_idx")
+  @@index([platformCustomerId], map: "subscriptions_platform_customer_idx")
+  @@index([planId], map: "subscriptions_plan_idx")
+  @@index([scheduledChangeDate], map: "subscriptions_scheduled_change_idx")
+}
+
+model Invoice {
+  id             String   @id @default(cuid())
+  number         String
+  tenantId       String
+  subscriptionId String
+  currency       String   @default("USD")
+  platformInvoiceId String?
+  hostedInvoiceUrl String?
+  amount         Int
+  status         String
+  priceSnapshot  Json
+  taxSnapshot    Json
+  planVersion    Int
+  taxPercent     Float?
+  taxAmount      Int?
+  jurisdiction   String?
+  usageAmount    Int? @default(0)
+  createdAt      DateTime @default(now())
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  @@unique([tenantId, number])
+  @@index([tenantId, createdAt], map: "invoices_tenant_created_idx")
+  @@index([tenantId, status], map: "invoices_tenant_status_idx")
+  @@index([subscriptionId], map: "invoices_subscription_idx")
+}
+
+model PaymentMethod {
+  id                   String   @id @default(cuid())
+  tenantId             String
+  platformCustomerId   String
+  gatewayPaymentMethodId String
+  brand        String?
+  last4        String?
+  expMonth     Int?
+  expYear      Int?
+  name         String?
+  isDefault    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@index([tenantId, isDefault], map: "payment_methods_tenant_default_idx")
+  @@index([tenantId, createdAt], map: "payment_methods_tenant_created_idx")
+  @@index([platformCustomerId], map: "payment_methods_platform_customer_idx")
+  @@index([gatewayPaymentMethodId], map: "payment_methods_gateway_pm_idx")
+}
+
+model UsageRecord {
+  id         String   @id @default(cuid())
+  tenantId   String
+  meter      String
+  quantity   Float
+  unit       String
+  occurredAt DateTime @default(now())
+  resourceId String?
+  metadata   Json?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@index([tenantId, occurredAt], map: "usage_records_tenant_time_idx")
+  @@index([tenantId, meter, occurredAt], map: "usage_records_tenant_meter_time_idx")
+}
+
+enum PlatformAbandonedCartStatus {
+  open
+  recovered
+  discarded
+}
+
+enum PlatformRequestStatus {
+  new
+  in_review
+  converted
+  rejected
+}
+
+enum RequestKind {
+  contact
+  trial
+  enterprise
+}
+
+model PlatformAbandonedCart {
+  id            String                      @id @default(cuid())
+  email         String?
+  planId        String?
+  priceId       String?
+  tenantCode    String?
+  sessionId     String                      @unique
+  utm           Json?
+  lastSeenAt    DateTime                    @default(now())
+  reminderCount Int                         @default(0)
+  recoveredAt   DateTime?
+  status        PlatformAbandonedCartStatus @default(open)
+  currency      String                      @default("USD")
+  createdAt     DateTime                    @default(now())
+  updatedAt     DateTime                    @updatedAt
+
+  @@index([status, lastSeenAt])
+  @@index([email])
+  @@map("platform_abandoned_carts")
+}
+
+model RequestFormSubmission {
+  id                String                @id @default(cuid())
+  kind              RequestKind
+  email             String
+  company           String?
+  message           String?
+  attachments       Json?
+  utm               Json?
+  status            PlatformRequestStatus @default(new)
+  assignedToId      String?
+  assignedAt        DateTime?
+  convertedTenantId String?
+  convertedAt       DateTime?
+  rejectedAt        DateTime?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  assignedTo   PlatformUser? @relation(name: "RequestAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([email, kind])
+  @@index([assignedToId])
+  @@map("request_form_submissions")
+}
+
+model WebhookEndpoint {
+  id           String  @id @default(cuid())
+  provider     String  // razorpay, paypal
+  kind         String  // platform_subscription
+  url          String
+  secretMasked String?
+  active       Boolean @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([provider, kind])
+  @@index([provider])
+  @@index([active])
+  @@map("webhook_endpoints")
+}
+
+model WebhookDelivery {
+  id          String    @id @default(cuid())
+  provider    String
+  eventId     String
+  status      String    @default("received") // received, processed, skipped, failed
+  payloadHash String
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+  error       String?
+
+  @@unique([provider, eventId])
+  @@index([provider])
+  @@index([status])
+  @@index([receivedAt])
+  @@map("webhook_deliveries")
+}
+
+model ImpersonationGrant {
+  id        String    @id @default(cuid())
+  issuedById String
+  tenantId  String
+  reason    String
+  scope     String    // read_only, billing_support, full_tenant_admin
+  jti       String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  issuedBy PlatformUser @relation("ImpersonationIssuedBy", fields: [issuedById], references: [id])
+
+  @@index([issuedById])
+  @@index([tenantId])
+  @@index([jti])
+  @@index([expiresAt])
+  @@map("impersonation_grants")
+}
+
+model OffboardingJob {
+  id            String   @id @default(cuid())
+  tenantId      String   @unique
+  reason        String
+  scheduledAt   DateTime
+  retentionDays Int
+  status        String   @default("scheduled") // scheduled, processing, completed
+  processingAt  DateTime?
+  completedAt   DateTime?
+  initiatedById String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant      Tenant       @relation(name: "TenantOffboardingJobs", fields: [tenantId], references: [id], onDelete: Cascade)
+  initiatedBy PlatformUser @relation(name: "OffboardingInitiatedBy", fields: [initiatedById], references: [id])
+
+  @@map("offboarding_jobs")
+}
+
+model KycRecord {
+  id           String    @id @default(cuid())
+  tenantId     String
+  status       String    // pending, verified, rejected
+  provider     String?
+  refId        String?
+  submittedAt  DateTime  @default(now())
+  reviewedById String?
+  reviewedAt   DateTime?
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @default(now()) @updatedAt
+
+  reviewedBy PlatformUser? @relation("KycReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([reviewedById])
+  @@map("kyc_records")
+}
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  platformUserId String?
+  tenantId       String?
+  action         String
+  resource       String?
+  resourceId     String?
+  changes        Json?
+  ipAddress      String?
+  userAgent      String?
+  reason         String?
+  requestId      String?
+  createdAt      DateTime @default(now())
+
+  @@index([platformUserId])
+  @@index([tenantId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model PublicSignupAttempt {
+  id             String   @id @default(cuid())
+  ownerEmail     String
+  tenantCode     String
+  idempotencyKey String   @unique
+  response       Json
+  createdAt      DateTime @default(now())
+
+  @@unique([ownerEmail, tenantCode])
+  @@map("public_signup_attempts")
+}

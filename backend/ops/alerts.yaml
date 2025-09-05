@@ -1,0 +1,102 @@
+# Basic alert rules
+- alert: HighErrorRate
+  expr: |
+    (sum(rate(http_request_duration_ms_count{status=~"5.."}[5m])) /
+    sum(rate(http_request_duration_ms_count[5m]))) > 0.05
+  for: 5m
+  labels:
+    severity: page
+  annotations:
+    summary: High 5xx error ratio detected
+- alert: AuthFailures
+  expr: increase(auth_failures_total[10m]) > 5
+  for: 10m
+  labels:
+    severity: warning
+  annotations:
+    summary: Excessive authentication failures
+- alert: AuthLockouts
+  expr: increase(auth_lockouts_total[10m]) > 3
+  for: 10m
+  labels:
+    severity: warning
+  annotations:
+    summary: Login lockouts spiking
+- alert: WebhookFailures
+  expr: increase(webhook_failures_total[5m]) > 0
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: Webhook failures detected
+- alert: WebhookReplaySpike
+  expr: increase(webhook_replays_total[5m]) > 20
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: Webhook replays spiking
+- alert: BreakerOpenRate
+  expr: increase(breaker_open_total[5m]) > 0
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: Circuit breaker opened
+- alert: ExternalBreakerStaysOpen
+  expr: increase(external_breaker_still_open_total[5m]) > 0
+  for: 5m
+  labels:
+    severity: page
+  annotations:
+    summary: External circuit breaker stayed open
+- alert: DbUnavailableSpikes
+  expr: increase(db_unavailable_total[5m]) > 0
+  for: 5m
+  labels:
+    severity: page
+  annotations:
+    summary: Database unavailable for tenants
+- alert: PreflightLatencyHigh
+  expr: |
+    histogram_quantile(0.95, sum(rate(preflight_latency_ms_bucket[5m])) by (le)) > 1000
+  for: 10m
+  labels:
+    severity: warning
+  annotations:
+    summary: Preflight latency p95 > 1s
+- alert: DunningRetrySurge
+  expr: increase(dunning_retries_total[1h]) > 20
+  for: 1h
+  labels:
+    severity: warning
+  annotations:
+    summary: Dunning retries surging
+- alert: HighChurnRate
+  expr: platform_churn_rate > 5
+  for: 1h
+  labels:
+    severity: warning
+  annotations:
+    summary: Churn rate exceeds 5%
+- alert: MRRDrop
+  expr: platform_mrr < platform_mrr offset 1d
+  for: 1h
+  labels:
+    severity: warning
+  annotations:
+    summary: MRR decreased since yesterday
+- alert: DedicatedClientsHigh
+  expr: prisma_dedicated_clients > 10
+  for: 10m
+  labels:
+    severity: warning
+  annotations:
+    summary: Dedicated Prisma clients cache unexpectedly large
+- alert: PrismaCapMisconfigured
+  expr: prisma_shared_connection_cap > 40
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: Shared Prisma connection cap may be misconfigured

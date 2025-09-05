@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Itinerary Proposal</title>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background: linear-gradient(135deg, #104c57 0%, #ff914d 100%); color: white; padding: 30px; text-align: center; }
+    .content { padding: 30px; background: #f9f9f9; }
+    .card { background: white; padding: 20px; margin: 20px 0; border-radius: 8px; }
+    .button { display: inline-block; background: #ff914d; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin: 10px 0; }
+    .footer { text-align: center; padding: 20px; color: #666; }
+    .social-row       { text-align:center; }
+    .social-row .icon { display:inline-block; margin:0 6px; width:40px; height:40px; border-radius:50%; background:#ddd;
+                        line-height:40px; vertical-align:middle; }
+    .social-row img   { width:20px; height:20px; margin:10px; display:block; }
+    .icon.facebook  { background:#ffffff; }
+    .icon.linkedin  { background:#ffffff; }
+    .icon.twitter   { background:#ffffff; }
+    .icon.instagram { background:#ffffff; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>{{companyName}}</h1>
+    </div>
+
+    <div class="content">
+      <h2>Itinerary Proposal</h2>
+      <p>Hi {{sanitize customerName}},</p>
+      {{#if personalMessageHtml}}
+      <p>{{{personalMessageHtml}}}</p>
+      {{/if}}
+      <p>Please find attached the itinerary proposal for <strong>{{sanitize packageName}}</strong>.</p>
+
+      <div class="card">
+        <h3 style="margin-top:0;">Trip Summary</h3>
+        <ul style="padding-left: 18px; margin: 10px 0;">
+          <li>Dates: {{startDate}}{{#if endDate}} - {{endDate}}{{/if}}</li>
+          <li>Guests: {{adults}} adult(s){{#if children}}, {{children}} child(ren){{/if}}</li>
+          <li>Location: {{sanitize location}}</li>
+        </ul>
+      </div>
+
+      {{#if reviewLink}}
+        <div style="text-align: center;">
+          <a href="{{reviewLink}}" class="button" target="_blank" rel="noopener">Open Proposal PDF</a>
+        </div>
+      {{/if}}
+
+      <p>Reply to this email for any changes or approval.</p>
+    </div>
+
+    <div class="footer">
+      <p>{{companyName}} - Discover the Extraordinary</p>
+      <p style="margin: 12px 0 6px 0; font-weight: 600;">Follow us on</p>
+      <div class="social-row">
+        {{#if FACEBOOK_URL}}
+          <a href="{{FACEBOOK_URL}}" class="icon facebook" aria-label="Facebook">
+            <img src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/facebook.svg" alt="Facebook"/>
+          </a>
+        {{/if}}
+        {{#if LINKEDIN_URL}}
+          <a href="{{LINKEDIN_URL}}" class="icon linkedin" aria-label="LinkedIn">
+            <img src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/linkedin.svg" alt="LinkedIn"/>
+          </a>
+        {{/if}}
+        {{#if X_URL}}
+          <a href="{{X_URL}}" class="icon twitter" aria-label="X / Twitter">
+            <img src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/x.svg" alt="X / Twitter"/>
+          </a>
+        {{/if}}
+        {{#if INSTAGRAM_URL}}
+          <a href="{{INSTAGRAM_URL}}" class="icon instagram" aria-label="Instagram">
+            <img src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/instagram.svg" alt="Instagram"/>
+          </a>
+        {{/if}}
+      </div>
+    </div>
+  </div>
+</body>
+</html>

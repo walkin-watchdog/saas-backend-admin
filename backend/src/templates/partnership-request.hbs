@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Partnership Request</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #104c57 0%, #ff914d 100%); color: white; padding: 30px; text-align: center; }
+        .content { padding: 30px; background: #f9f9f9; }
+        .footer { text-align: center; padding: 20px; color: #666; }
+        .social-row       { text-align:center; }
+        .social-row .icon { display:inline-block; margin:0 6px; width:40px; height:40px; border-radius:50%; background:#ddd;
+                            line-height:40px; vertical-align:middle; }
+        .social-row img   { width:20px; height:20px; margin:10px; display:block; }
+        .icon.facebook  { background:#ffffff; }
+        .icon.linkedin  { background:#ffffff; }
+        .icon.twitter   { background:#ffffff; }
+        .icon.instagram { background:#ffffff; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>{{companyName}}</h1>
+        </div>
+        
+        <div class="content">
+            <h2>Partnership Request</h2>
+            <p><strong>Company Name:</strong> {{companyName}}</p>
+            <p><strong>Contact Person:</strong> {{contactPerson}}</p>
+            <p><strong>Email:</strong> {{email}}</p>
+            <p><strong>Phone:</strong> {{phone}}</p>
+            <p><strong>Partnership Type:</strong> {{partnershipType}}</p>
+            <p><strong>Website:</strong> {{website}}</p>
+            <p><strong>Message:</strong></p>
+            <p>{{message}}</p>
+        </div>
+        
+        <div class="footer">
+            <p>Thank you for considering a partnership with {{companyName}}.</p>
+            <p style="margin: 12px 0 6px 0; font-weight: 600;">Follow us on</p>
+            <div class="social-row">
+                {{#if FACEBOOK_URL}}
+                <a href="{{FACEBOOK_URL}}" class="icon facebook"  aria-label="Facebook">
+                    <img src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/facebook.svg" alt="Facebook"/>
+                </a>
+                {{/if}}
+                {{#if LINKEDIN_URL}}
+                <a href="{{LINKEDIN_URL}}" class="icon linkedin"  aria-label="LinkedIn">
+                    <img src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/linkedin.svg" alt="LinkedIn"/>
+                </a>
+                {{/if}}
+                {{#if X_URL}}
+                <a href="{{X_URL}}" class="icon twitter"    aria-label="X / Twitter">
+                    <img src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/x.svg" alt="X / Twitter"/>
+                </a>
+                {{/if}}
+                {{#if INSTAGRAM_URL}}
+                <a href="{{INSTAGRAM_URL}}" class="icon instagram" aria-label="Instagram">
+                    <img src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/instagram.svg" alt="Instagram"/>
+                </a>
+                {{/if}}
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,6 @@
+# Prometheus scrape configuration for SAAS backend
+scrape_configs:
+  - job_name: 'saas-backend'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['saas-backend:3001']

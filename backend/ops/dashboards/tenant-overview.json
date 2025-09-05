@@ -1,0 +1,61 @@
+{
+  "title": "Tenant Overview",
+  "timezone": "browser",
+  "templating": {
+    "list": [
+      {
+        "name": "tenant",
+        "type": "query",
+        "datasource": "Prometheus",
+        "query": "label_values(http_request_duration_ms_count, tenant)",
+        "refresh": 1
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "graph",
+      "title": "HTTP 5xx Rate",
+      "targets": [
+        {
+          "expr": "sum(rate(http_request_duration_ms_count{tenant=~\"$tenant\",status=~\"5..\"}[5m])) / sum(rate(http_request_duration_ms_count{tenant=~\"$tenant\"}[5m]))",
+          "legendFormat": "{{tenant}}"
+        }
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Auth Failures vs Lockouts",
+      "targets": [
+        {
+          "expr": "increase(auth_failures_total{tenant=~\"$tenant\"}[5m])",
+          "legendFormat": "failures"
+        },
+        {
+          "expr": "increase(auth_lockouts_total{tenant=~\"$tenant\"}[5m])",
+          "legendFormat": "lockouts"
+        }
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Job Queue Depth",
+      "targets": [
+        {
+          "expr": "job_queue_depth{tenant=~\"$tenant\"}",
+          "legendFormat": "{{job}}"
+        }
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Job Duration",
+      "targets": [
+        {
+          "expr": "rate(job_duration_ms_sum{tenant=~\"$tenant\"}[5m]) / rate(job_duration_ms_count{tenant=~\"$tenant\"}[5m])",
+          "legendFormat": "{{job}}"
+        }
+      ]
+    }
+  ]
+}

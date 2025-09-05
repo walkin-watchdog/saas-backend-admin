@@ -1,0 +1,500 @@
+name: CI
+
+on: [push, pull_request]
+
+defaults:
+  run:
+    working-directory: backend
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Warm the runner once so later jobs don't pull images / node again.
+  warm-cache:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pre-pull service images to local Docker cache
+        working-directory: .
+        run: |
+          set -euo pipefail
+          for img in postgres:17 redis:7; do
+            if ! docker image inspect "$img" >/dev/null 2>&1; then
+              docker pull --quiet "$img"
+            else
+              echo "Image $img already present – skipping pull."
+            fi
+          done
+      - name: Warm Node 20 toolcache (persists on ubuntu-latest runner)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+  test:
+    needs: [warm-cache]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - tenant: tenant1
+            PGPORT: 55432
+            REDISPORT: 56379
+          - tenant: tenant2
+            PGPORT: 55433
+            REDISPORT: 56380
+          - tenant: tenant3
+            PGPORT: 55434
+            REDISPORT: 56381
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:${{ matrix.PGPORT }}/app_test
+      REDIS_URL: redis://localhost:${{ matrix.REDISPORT }}
+      CACHE_TEST_USE_REDIS: 'true'
+      TENANT_TEST_ID: ${{ matrix.tenant }}
+      LOG_LEVEL: error
+      DOTENV_CONFIG_PATH: ./.env.test
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: app_test
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+        ports: ['${{ matrix.PGPORT }}:5432']
+        options: >-
+          --health-cmd "pg_isready -U test -d app_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports: ['${{ matrix.REDISPORT }}:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+      - name: Cache Jest cache (optional)
+        uses: actions/cache@v4
+        with:
+          path: |
+            backend/node_modules/.cache/ts-jest
+            ~/.cache/jest
+          key: tsjest-${{ runner.os }}-${{ hashFiles('backend/package-lock.json', 'backend/tsconfig.json', 'backend/jest.config.*', 'backend/**/*.[jt]s', 'backend/**/*.[jt]sx') }}
+          restore-keys: |
+            tsjest-${{ runner.os }}-${{ github.ref }}-
+            tsjest-${{ runner.os }}-
+
+      - name: Cache Prisma engines (avoid re-downloads)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/prisma
+          key: prisma-${{ runner.os }}-${{ hashFiles('backend/package-lock.json') }}
+          restore-keys: |
+            prisma-${{ runner.os }}-
+      - run: npm ci --prefer-offline --no-audit --fund=false
+      - name: Type-check (separate from Jest to save memory)
+        run: npm run typecheck
+      - name: Run migrations (transactional) with logs
+        env:
+          # crank verbosity so failures are explicit and traceable
+          PRISMA_MIGRATION_ENGINE_LOG_LEVEL: debug
+          PRISMA_LOG_LEVEL: debug
+          RUST_LOG: info
+        run: |
+          set -eo pipefail
+          echo "::group::Prisma migrate deploy (${{ matrix.tenant }})"
+          npx prisma migrate deploy 2>&1 | tee migrate-${{ matrix.tenant }}.log
+          echo "::endgroup::"
+      - name: Upload migration logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: migrate-artifacts-${{ matrix.tenant }}
+          path: |
+            backend/migrate-${{ matrix.tenant }}.log
+          if-no-files-found: warn
+      - name: Summarize migration failure (transactional rollback only)
+        if: failure()
+        run: |
+          echo "----- Prisma migration tail (${{ matrix.tenant }}) -----"
+          tail -n 200 migrate-${{ matrix.tenant }}.log || true
+      - name: Explain rollback behavior
+        if: failure()
+        run: |
+          echo "Migrations run inside a single DB transaction."
+          echo "On failure, Prisma automatically rolls back the transaction to the prior state."
+          echo "This pipeline does not rotate or 'roll back' DATABASE_URLs; it surfaces logs and fails fast."
+      - name: Seed test tenants
+        run: |
+          npx ts-node -T -e "require('./tests/seedTenant').seedTenant(process.env.TENANT_TEST_ID).then(()=>console.log('Seeded', process.env.TENANT_TEST_ID))"
+      # Run tests with bigger Node heap. Do coverage only once (tenant1).
+      - name: Run tests (no coverage)
+        if: ${{ matrix.tenant != 'tenant1' }}
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+        run: npm run test:ci
+      - name: Run tests with coverage (tenant1 only)
+        if: ${{ matrix.tenant == 'tenant1' }}
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+        run: npm run test:ci:cov
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-artifacts-${{ matrix.tenant }}
+          path: |
+            backend/logs
+            backend/coverage
+            backend/webhook-failures
+          if-no-files-found: warn
+      - name: Cleanup test tenants
+        if: always()
+        run: |
+          npx ts-node -T -e "require('./tests/seedTenant').cleanupTenantByName(process.env.TENANT_TEST_ID).then(()=>console.log('Cleaned', process.env.TENANT_TEST_ID))"
+
+  migration-test:
+    needs: [warm-cache]
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:55440/migration_test
+      DOTENV_CONFIG_PATH: ./.env.test
+      REDIS_URL: redis://localhost:56390
+      CACHE_TEST_USE_REDIS: 'true'
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: migration_test
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+        ports: ['55440:5432']
+        options: >-
+          --health-cmd "pg_isready -U test -d migration_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports: ['56390:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            backend/package-lock.json
+      - name: Cache Prisma engines (avoid re-downloads)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/prisma
+          key: prisma-${{ runner.os }}-${{ hashFiles('backend/package-lock.json') }}
+          restore-keys: |
+            prisma-${{ runner.os }}-
+      - run: npm ci --prefer-offline --no-audit --fund=false
+      - name: Type-check (separate from Jest to save memory)
+        run: npm run typecheck
+      - name: Run migrations (transactional) with logs
+        env:
+          PRISMA_MIGRATION_ENGINE_LOG_LEVEL: debug
+          PRISMA_LOG_LEVEL: debug
+          RUST_LOG: info
+        run: |
+          set -eo pipefail
+          echo "::group::Prisma migrate deploy (migration-test)"
+          # It may fail by design when the test introduces a bad migration.
+          # Capture output so we can always inspect engine diagnostics.
+          npx prisma migrate deploy 2>&1 | tee migrate-migration-test.log || true
+          echo "::endgroup::"
+      - name: Upload migration logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-logs-migration-test
+          path: backend/migrate-migration-test.log
+          if-no-files-found: warn
+      - name: Explain rollback behavior
+        if: failure()
+        run: |
+          echo "Migrations are transactional; a failed deploy reverts automatically."
+          echo "We keep the current DATABASE_URL and expose diagnostics for inspection."
+      - name: Test migration rollback
+        run: npm test -- --testPathPattern=migrationFailureRollback.test.ts
+
+  migrate-tenants:
+    needs: [warm-cache, test, migration-test]
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:55450/app_test
+      DOTENV_CONFIG_PATH: ./.env.test
+      REDIS_URL: redis://localhost:56400
+      CACHE_TEST_USE_REDIS: 'true'
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: app_test
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+        ports: ['55450:5432']
+        options: >-
+          --health-cmd "pg_isready -U test -d app_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports: ['56400:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            backend/package-lock.json
+      - name: Cache Prisma engines (avoid re-downloads)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/prisma
+          key: prisma-${{ runner.os }}-${{ hashFiles('backend/package-lock.json') }}
+          restore-keys: |
+            prisma-${{ runner.os }}-
+      - run: npm ci --prefer-offline --no-audit --fund=false
+      - name: Type-check (separate from Jest to save memory)
+        run: npm run typecheck
+      - name: Bootstrap registry schema (create tables)
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+        run: npx prisma migrate deploy
+      - name: Run per-tenant migrations
+        run: npm run db:migrate:tenants -- --wave-size=1 --promote
+
+  # staging-canary:
+  #   needs: [warm-cache, test, migration-test, migrate-tenants]
+  #   runs-on: ubuntu-latest
+  #   # Manual gate: set reviewers on the "staging" environment in GitHub → Settings → Environments
+  #   environment:
+  #     name: staging
+  #     url: ${{ secrets.STAGING_CANARY_URL }}
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version: '20'
+  #         cache: 'npm'
+  #         cache-dependency-path: |
+  #           backend/package-lock.json
+  #     - name: Cache Prisma engines (avoid re-downloads)
+  #       uses: actions/cache@v4
+  #       with:
+  #         path: ~/.cache/prisma
+  #         key: prisma-${{ runner.os }}-${{ hashFiles('backend/package-lock.json') }}
+  #         restore-keys: |
+  #           prisma-${{ runner.os }}-
+  #     - run: npm ci --prefer-offline --no-audit --fund=false
+  #     - name: Type-check (separate from Jest to save memory)
+  #       run: npm run typecheck
+  #     - run: npm run build
+  #     - name: Deploy to staging canary
+  #       env:
+  #         STAGING_CANARY_URL: ${{ secrets.STAGING_CANARY_URL }}
+  #       run: npm run deploy:staging
+  #     - name: Smoke check staging canary (fail fast if sick)
+  #       env:
+  #         STAGING_CANARY_URL: ${{ secrets.STAGING_CANARY_URL }}
+  #       run: |
+  #         set -euo pipefail
+  #         base="${STAGING_CANARY_URL%/}"
+  #         # Prefer the stronger readiness check; fall back to /api/health only
+  #         try_paths=("/health/ready" "/api/health")
+  #         selected=""
+  #         # Quick probe to discover which endpoint exists
+  #         for p in "${try_paths[@]}"; do
+  #           code="$(curl -s -o /dev/null -w '%{http_code}' "$base$p" || true)"
+  #           if [ "$code" = "200" ]; then
+  #             selected="$p"
+  #             break
+  #           fi
+  #         done
+  #         if [ -z "$selected" ]; then
+  #           echo "No health endpoint returned 200 at $base (tried: ${try_paths[*]})."
+  #           exit 1
+  #         fi
+  #         echo "Using health endpoint: $selected"
+  #         # Wait up to 5 minutes for readiness (60 x 5s)
+  #         for i in {1..60}; do
+  #           code="$(curl -s -o /tmp/health.out -w '%{http_code}' "$base$selected")"
+  #           if [ "$code" = "200" ]; then
+  #             echo "Staging canary healthy at $base$selected"
+  #             exit 0
+  #           fi
+  #           sleep 5
+  #         done
+  #         echo "Staging canary did not become healthy in time at $base$selected"
+  #         exit 1
+
+  # # Promote/rollback DSN pointers for production after tests pass.
+  # # This prevents flipping production to a broken database if a migration fails.
+  # production-migrate:
+  #   needs: [warm-cache, test, migration-test, migrate-tenants, staging-canary]
+  #   if: github.ref == 'refs/heads/main'
+  #   runs-on: ubuntu-latest
+  #   environment: production
+  #   concurrency:
+  #     group: production-migrate
+  #     cancel-in-progress: false
+  #   env:
+  #     # Candidate DSN we attempt to migrate
+  #     CANDIDATE_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL_CANDIDATE }}
+  #     # Last-known-good DSN (kept as a separate pointer)
+  #     LAST_KNOWN_GOOD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL_LKG }}
+  #     PRISMA_MIGRATION_ENGINE_LOG_LEVEL: info
+  #     PRISMA_LOG_LEVEL: info
+  #     RUST_LOG: info
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version: '20'
+  #         cache: 'npm'
+  #         cache-dependency-path: |
+  #           backend/package-lock.json
+  #     - name: Cache Prisma engines (avoid re-downloads)
+  #       uses: actions/cache@v4
+  #       with:
+  #         path: ~/.cache/prisma
+  #         key: prisma-${{ runner.os }}-${{ hashFiles('backend/package-lock.json') }}
+  #         restore-keys: |
+  #           prisma-${{ runner.os }}-
+  #     - name: Install GitHub CLI
+  #       run: |
+  #         set -euo pipefail
+  #         if ! command -v gh >/dev/null 2>&1; then
+  #           curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+  #           sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+  #           echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null
+  #           sudo apt-get update
+  #           sudo apt-get install -y gh
+  #         fi
+  #     - run: npm ci --prefer-offline --no-audit --fund=false
+  #     - name: Type-check (separate from Jest to save memory)
+  #       run: npm run typecheck
+  #     - name: Attempt production migration against CANDIDATE DSN
+  #       id: migrate
+  #       env:
+  #         DATABASE_URL: ${{ env.CANDIDATE_DATABASE_URL }}
+  #       run: |
+  #         set -euo pipefail
+  #         echo "::group::Prisma migrate deploy (production candidate)"
+  #         npx prisma migrate deploy 2>&1 | tee migrate-production.log
+  #         echo "::endgroup::"
+  #     - name: Post-migration smoke test (against candidate)
+  #       if: success()
+  #       env:
+  #         DATABASE_URL: ${{ env.CANDIDATE_DATABASE_URL }}
+  #       run: |
+  #         set -euo pipefail
+  #         # Simple connectivity and one hot-path check
+  #         node -e "const {PrismaClient}=require('@prisma/client');(async()=>{const p=new PrismaClient(); await p.$queryRaw`SELECT 1`; await p.plan.findMany({ take: 1 }); await p.$disconnect();})().catch(e=>{console.error(e);process.exit(1)})"
+  #     - name: Promote production DSN pointers on success
+  #       if: success()
+  #       env:
+  #         GH_TOKEN: ${{ secrets.GH_PAT }}
+  #       run: |
+  #         set -euo pipefail
+  #         # Promote ACTIVE to the candidate
+  #         printf "%s" "${CANDIDATE_DATABASE_URL}" | gh secret set PROD_DATABASE_URL_ACTIVE -e production --body -
+  #         # Advance LKG to the same candidate (new LKG)
+  #         printf "%s" "${CANDIDATE_DATABASE_URL}" | gh secret set PROD_DATABASE_URL_LKG -e production --body -
+  #         echo "Promoted PROD_DATABASE_URL_ACTIVE and PROD_DATABASE_URL_LKG to candidate DSN."
+  #     - name: Roll back ACTIVE DSN pointer on failure
+  #       if: failure()
+  #       env:
+  #         GH_TOKEN: ${{ secrets.GH_PAT }}
+  #       run: |
+  #         set -euo pipefail
+  #         # Explicitly restore ACTIVE to the last-known-good DSN
+  #         printf "%s" "${LAST_KNOWN_GOOD_DATABASE_URL}" | gh secret set PROD_DATABASE_URL_ACTIVE -e production --body -
+  #         echo "Rolled back PROD_DATABASE_URL_ACTIVE to last-known-good DSN."
+  #     - name: Upload production migration logs
+  #       if: always()
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: migration-logs-production
+  #         path: backend/migrate-production.log
+
+  # # NEW: After production-migrate succeeds (promotion done), actually deploy/restart prod
+  # production-deploy:
+  #   if: github.ref == 'refs/heads/main'
+  #   needs: [warm-cache, production-migrate]
+  #   runs-on: ubuntu-latest
+  #   environment: production
+  #   concurrency:
+  #     group: production-deploy
+  #     cancel-in-progress: false
+  #   steps:
+  #     - name: Trigger production deploy/restart
+  #       env:
+  #         # e.g. https://prod.example.com/deploy  (set this in GitHub Actions secrets)
+  #         PROD_DEPLOY_URL: ${{ secrets.PROD_DEPLOY_URL }}
+  #       run: |
+  #         set -euo pipefail
+  #         if [ -z "${PROD_DEPLOY_URL:-}" ]; then
+  #           echo "PROD_DEPLOY_URL secret not set"; exit 1
+  #         fi
+  #         echo "Triggering production deploy at $PROD_DEPLOY_URL"
+  #         curl -fsS -X POST "$PROD_DEPLOY_URL" >/dev/null
+  #         echo "Deploy/restart triggered."
+  
+  #     - name: Wait for production to be healthy
+  #       env:
+  #         # You can set either a full URL (https://prod.example.com/health/ready)
+  #         # or just the base (https://prod.example.com) — this step will probe common paths.
+  #         PROD_HEALTH_URL: ${{ secrets.PROD_HEALTH_URL }}
+  #       run: |
+  #         set -euo pipefail
+  #         if [ -z "${PROD_HEALTH_URL:-}" ]; then
+  #           echo "PROD_HEALTH_URL secret not set"; exit 1
+  #         fi
+  #         base="${PROD_HEALTH_URL%/}"
+  #         try_paths=("/health/ready" "/api/health")
+  #         selected=""
+  #         # Pick a working health endpoint
+  #         for p in "${try_paths[@]}"; do
+  #           code="$(curl -s -o /dev/null -w '%{http_code}' "$base$p" || true)"
+  #           if [ "$code" = "200" ]; then selected="$p"; break; fi
+  #         done
+  #         if [ -z "$selected" ]; then
+  #           echo "No health endpoint returned 200 at $base (tried: ${try_paths[*]})."
+  #           exit 1
+  #         fi
+  #         echo "Using health endpoint: $base$selected"
+  #         # Wait up to 5 minutes (60 x 5s) for readiness
+  #         for i in {1..60}; do
+  #           code="$(curl -s -o /tmp/health.out -w '%{http_code}' "$base$selected" || true)"
+  #           if [ "$code" = "200" ]; then
+  #             echo "Production healthy."; exit 0
+  #           fi
+  #           sleep 5
+  #         done
+  #         echo "Production did not become healthy in time."
+  #         exit 1

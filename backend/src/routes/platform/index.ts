@@ -1,0 +1,43 @@
+import express from 'express';
+import subscribersRoutes from './subscribers';
+import couponsRoutes from './coupons';
+import ordersRoutes from './orders';
+import invoicesRoutes from './invoices';
+import abandonedCartsRoutes from './abandonedCarts';
+import requestsRoutes from './requests';
+import kycRoutes from './kyc';
+import webhooksRoutes from './webhooks';
+import auditLogRoutes from './auditLog';
+import metricsRoutes from './metrics';
+import configRoutes from './config';
+import tenantsRoutes from './tenants';
+import impersonateRoutes from './impersonate';
+import usersRoutes from './users';
+import creditNoteRoutes from './creditNotes';
+import plansRoutes from './plans';
+import diagnosticsRoutes from './diagnostics';
+import permissionsRoutes from './permissions';
+import { authenticatePlatform, requireMfaEnabled } from '../../middleware/platformAuth';
+
+const router = express.Router();
+
+router.use('/subscribers', authenticatePlatform, requireMfaEnabled, subscribersRoutes);
+router.use('/coupons', authenticatePlatform, requireMfaEnabled, couponsRoutes);
+router.use('/orders', authenticatePlatform, requireMfaEnabled, ordersRoutes);
+router.use('/invoices', authenticatePlatform, requireMfaEnabled, invoicesRoutes);
+router.use('/abandoned-carts', authenticatePlatform, requireMfaEnabled, abandonedCartsRoutes);
+router.use('/requests', authenticatePlatform, requireMfaEnabled, requestsRoutes);
+router.use('/kyc', authenticatePlatform, requireMfaEnabled, kycRoutes);
+router.use('/webhooks', authenticatePlatform, requireMfaEnabled, webhooksRoutes);
+router.use('/audit-log', authenticatePlatform, requireMfaEnabled, auditLogRoutes);
+router.use('/metrics', authenticatePlatform, requireMfaEnabled, metricsRoutes);
+router.use('/config', authenticatePlatform, requireMfaEnabled, configRoutes);
+router.use('/tenants', authenticatePlatform, requireMfaEnabled, tenantsRoutes);
+router.use('/impersonate', authenticatePlatform, requireMfaEnabled, impersonateRoutes);
+router.use('/users', authenticatePlatform, requireMfaEnabled, usersRoutes);
+router.use('/credit-notes', authenticatePlatform, requireMfaEnabled, creditNoteRoutes);
+router.use('/plans', authenticatePlatform, requireMfaEnabled, plansRoutes);
+router.use('/diagnostics', authenticatePlatform, requireMfaEnabled, diagnosticsRoutes);
+router.use('/permissions', authenticatePlatform, requireMfaEnabled, permissionsRoutes);
+
+export default router;

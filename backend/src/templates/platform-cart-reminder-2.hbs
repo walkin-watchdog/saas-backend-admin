@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Complete Your Signup</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%); color: white; padding: 30px; text-align: center; }
+        .content { padding: 30px; background: #f9f9f9; }
+        .cta-box { background: white; padding: 25px; margin: 20px 0; border-radius: 8px; text-align: center; border-left: 5px solid #2563eb; }
+        .button { display: inline-block; background: #2563eb; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; margin: 15px 0; font-weight: 600; }
+        .footer { text-align: center; padding: 20px; color: #666; font-size: 14px; }
+        .reminder-badge { background: #fef3c7; color: #92400e; padding: 8px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; margin-bottom: 15px; display: inline-block; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>{{companyName}}</h1>
+            <p style="margin: 10px 0 0; opacity: 0.9;">Complete Your Signup</p>
+        </div>
+
+        <div class="content">
+            {{#if reminderNumber}}
+            <div class="reminder-badge">
+                Reminder #{{reminderNumber}}
+            </div>
+            {{/if}}
+
+            <h2>Your signup is waiting!</h2>
+            <p>Hi again,</p>
+            <p>We noticed you haven't finished your signup yet. Jump back in to unlock your free trial and explore everything we have to offer.</p>
+
+            <div class="cta-box">
+                <h3 style="margin-top: 0; color: #2563eb;">🚀 Resume Your Signup</h3>
+                <p>Complete your registration to get full access for 7 days.</p>
+                <a href="{{recoveryUrl}}" class="button">Finish Signup</a>
+            </div>
+
+            <p><strong>Why finish?</strong></p>
+            <ul style="padding-left: 20px;">
+                <li>✅ Access all features</li>
+                <li>✅ Manage multiple tenants</li>
+                <li>✅ View advanced analytics</li>
+                <li>✅ Get priority support</li>
+                <li>✅ No setup fees</li>
+            </ul>
+
+            <p>Questions? Reach us at <a href="mailto:{{companyEmail}}">{{companyEmail}}</a></p>
+
+            <p style="margin-top: 30px; font-size: 14px; color: #666;">
+                This link will expire in 24 hours. If you no longer wish to receive these emails, you can ignore this message.
+            </p>
+        </div>
+
+        <div class="footer">
+            <p>{{companyName}} - Powerful SaaS Platform</p>
+            <p>© {{currentYear}} {{companyName}}. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>
+

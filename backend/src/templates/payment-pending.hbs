@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reminder</title>
+  <style>
+    body   { font-family: Arial, sans-serif; line-height: 1.6; color:#333; }
+    .wrap  { max-width:600px;margin:0 auto;padding:20px; }
+    .hdr   { background:linear-gradient(135deg,#104c57 0%,#ff914d 100%);
+             color:#fff;padding:30px;text-align:center; }
+    .cnt   { padding:30px;background:#f9f9f9; }
+    .box   { background:#fff;padding:20px;border-radius:8px;margin:20px 0; }
+    .btn   { display:inline-block;margin-top:15px;background:#ff914d;
+             color:#fff;padding:12px 24px;border-radius:5px;text-decoration:none; }
+    .ftr   { text-align:center;padding:20px;color:#666;font-size:.85rem; }
+    .warn  { color:#c0392b;font-weight:bold; }
+    .social-row       { text-align:center; }
+    .social-row .icon { display:inline-block; margin:0 6px; width:40px; height:40px; border-radius:50%; background:#ddd;
+                        line-height:40px; vertical-align:middle; }
+    .social-row img   { width:20px; height:20px; margin:10px; display:block; }
+    .icon.facebook  { background:#ffffff; }
+    .icon.linkedin  { background:#ffffff; }
+    .icon.twitter   { background:#ffffff; }
+    .icon.instagram { background:#ffffff; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hdr">
+      <h1>{{companyName}}</h1>
+    </div>
+
+    <div class="cnt">
+      <h2 class="warn">Payment Pending – Action Required</h2>
+      <p>Dear {{sanitize customerName}},</p>
+      <p>
+        Your booking <strong>{{bookingCode}}</strong> for
+        <strong>{{sanitize productTitle}}</strong> has been reserved.
+        To confirm it, please complete the payment of
+        <strong>{{currencySymbol}}{{totalAmount}}</strong>.
+      </p>
+
+      <div class="box">
+        <h3>Booking Summary</h3>
+        <p><strong>Adults:</strong> {{adults}}</p>
+        {{#if children}}
+          <p><strong>Children:</strong> {{children}}</p>
+        {{/if}}
+        <p><strong>Total Due:</strong> {{currencySymbol}}{{totalAmount}}</p>
+      </div>
+
+      {{!-- <div class="box">
+        <h3>Payment Options</h3>
+
+        <!-- PayPal -->
+        <div style="margin-bottom: 20px;">
+          <h4 style="margin-bottom: 8px;">🌐 PayPal Payment Option</h4>
+          <p>To pay via PayPal, please use the following link:</p>
+          <a href="https://paypal.me/zenseeo" class="btn" style="background:#003087;">
+            🔗 paypal.me/zenseeo
+          </a>
+        </div>
+
+        <!-- Razorpay -->
+        <div>
+          <h4 style="margin-bottom: 8px;">🌐 Razorpay Payment Option</h4>
+          <p>To pay via Razorpay, please use the following link:</p>
+          <a href="https://rzp.io/rzp/2jHtSGV" class="btn" style="background:#008CFF;">
+            🔗 rzp.io/rzp/2jHtSGV
+          </a>
+        </div>
+      </div> --}}
+
+      <p>
+        If we don’t receive the payment, the reservation
+        will be released automatically.
+      </p>
+
+      <p>
+        Questions? Contact us at {{companyEmail}} or {{companyPhone}}.
+      </p>
+    </div>
+
+    <div class="ftr">
+      Thank you for choosing {{companyName}} – Discover the Extraordinary
+      <p style="margin: 12px 0 6px 0; font-weight: 600;">Follow us on</p>
+          <div class="social-row">
+              {{#if FACEBOOK_URL}}
+              <a href="{{FACEBOOK_URL}}" class="icon facebook"  aria-label="Facebook">
+                  <img src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/facebook.svg" alt="Facebook"/>
+              </a>
+              {{/if}}
+              {{#if LINKEDIN_URL}}
+              <a href="{{LINKEDIN_URL}}" class="icon linkedin"  aria-label="LinkedIn">
+                  <img src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/linkedin.svg" alt="LinkedIn"/>
+              </a>
+              {{/if}}
+              {{#if X_URL}}
+              <a href="{{X_URL}}" class="icon twitter"    aria-label="X / Twitter">
+                  <img src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/x.svg" alt="X / Twitter"/>
+              </a>
+              {{/if}}
+              {{#if INSTAGRAM_URL}}
+              <a href="{{INSTAGRAM_URL}}" class="icon instagram" aria-label="Instagram">
+                  <img src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/instagram.svg" alt="Instagram"/>
+              </a>
+              {{/if}}
+          </div>
+    </div>
+  </div>
+</body>
+</html>
