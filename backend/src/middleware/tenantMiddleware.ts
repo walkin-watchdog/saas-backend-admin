@@ -41,6 +41,7 @@ export const resolveTenant = async (req: TenantRequest, res: Response, next: Nex
 
     const isDev = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
     const isAuth = req.path.startsWith('/api/auth');
+    // const allowApiKey = req.path.startsWith('/api/auth') || req.path.startsWith('/api/tenant/branding');
     let tenant: TenantContext | undefined;
     let jwtTenant: TenantContext | undefined;
     let headerTenant: TenantContext | undefined;
@@ -79,7 +80,16 @@ export const resolveTenant = async (req: TenantRequest, res: Response, next: Nex
           }
         }
 
-      // 1) Fall back to API key or Origin/Host mapping
+      // Fall back to API key or Origin/Host mapping only if no JWT tenant
+      // if (!skipHeaderTenant && !jwtTenant) {
+      //   if (!allowApiKey && req.headers['x-api-key']) {
+      //     throw new Error('API key not allowed for this endpoint');
+      //   }
+      //   headerTenant = allowApiKey
+      //     ? await TenantService.fromOriginOrApiKey(req)
+      //     : await TenantService.fromOrigin(req);
+      // }
+      // Fall back to API key or Origin/Host mapping
       if (!skipHeaderTenant) {
         headerTenant = await TenantService.fromOriginOrApiKey(req);
       }

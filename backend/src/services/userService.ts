@@ -1,5 +1,6 @@
 import { PrismaClient, UserRole, User } from '@prisma/client';
 import { getTenantPrisma, getTenantId, getCurrentTenant } from '../middleware/tenantMiddleware';
+import { withPlatformRole } from '../utils/prisma';
 
 type PublicUser = Pick<User, 'id' | 'email' | 'name' | 'role' | 'createdAt' | 'tokenVersion' | 'platformAdmin'>;
 type UserWithPassword = PublicUser & { password: string };
@@ -33,6 +34,33 @@ export class UserService {
         emailVerified: true,
       }
     });
+  }
+
+  static async findUserAcrossTenants(email: string) {
+    return withPlatformRole(tx =>
+      tx.user.findFirst({
+        where: { email },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          password: true,
+          tokenVersion: true,
+          platformAdmin: true,
+          failedLoginCount: true,
+          lockoutUntil: true,
+          twoFaEnabled: true,
+          twoFaSecret: true,
+          twoFaRecoveryCodes: true,
+          resetToken: true,
+          resetTokenExpiry: true,
+          createdAt: true,
+          emailVerified: true,
+          tenantId: true,
+        },
+      })
+    );
   }
 
   static async findUserById(id: string): Promise<PublicUser | null>;
@@ -221,6 +249,15 @@ export class UserService {
     return prisma.user.findFirst({
       where: { resetToken: hashedToken, resetTokenExpiry: { gt: new Date() } }
     });
+  }
+
+  static async findUserByResetTokenAcrossTenants(hashedToken: string) {
+    return withPlatformRole(tx =>
+      tx.user.findFirst({
+        where: { resetToken: hashedToken, resetTokenExpiry: { gt: new Date() } },
+        select: { id: true, tenantId: true },
+      })
+  );
   }
 
   static async clearResetTokenAndSetPassword(userId: string, hashedPassword: string) {

@@ -103,6 +103,60 @@ export class TenantService {
   }
 
   /**
+   * Resolve tenant purely from Origin/Host header
+   */
+  static async fromOrigin(req: Request): Promise<TenantContext> {
+    const raw = (req.headers.origin || req.headers.host || '').toString().trim();
+    if (!raw) {
+      const err = new Error('No tenant identifier provided'); (err as any).status = 400;
+      throw err;
+    }
+
+    let normalized: string;
+    try {
+      const u = new URL(raw.startsWith('http') ? raw : `http://${raw}`);
+      normalized = (u.port ? `${u.hostname}:${u.port}` : u.hostname).toLowerCase();
+    } catch {
+      normalized = raw
+        .replace(/^https?:\/\//i, '')
+        .replace(/\/.*$/, '')
+        .toLowerCase();
+    }
+
+    const domain = await prisma.tenantDomain.findUnique({
+      where: { domain: normalized },
+      include: {
+        tenant: {
+          select: {
+            id: true,
+            name: true,
+            status: true,
+            dedicated: true,
+            datasourceUrl: true,
+            dbName: true,
+          }
+        }
+      }
+    });
+
+    if (!domain || !domain.isActive) {
+      if (normalized.includes('localhost') || normalized.includes('127.0.0.1')) {
+        const defaultTenant = await this.getOrCreateDefaultTenant();
+        return defaultTenant;
+      }
+      const err = new Error('Unrecognized domain'); (err as any).status = 400;
+      throw err;
+    }
+
+    if (domain.tenant.status !== 'active') {
+      const err = new Error('Tenant account is suspended'); (err as any).status = 401;
+      throw err;
+    }
+
+    return domain.tenant;
+  }
+
+  /**
    * Get or create default tenant for development
    */
   static async getOrCreateDefaultTenant(): Promise<TenantContext> {
